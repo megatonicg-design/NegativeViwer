@@ -1,3 +1,4 @@
+/* App.css */
 :root {
   --bg-color: #1a1a1a;
   --panel-bg: #2a2a2a;
@@ -11,7 +12,8 @@ body {
   background-color: var(--bg-color);
   color: var(--text-color);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  user-select: none; /* 防止手機操作時誤選文字 */
+  user-select: none;
+  touch-action: manipulation; /* 優化觸控操作 */
 }
 
 .container {
@@ -19,6 +21,7 @@ body {
   margin: 0 auto;
   padding: 20px;
   text-align: center;
+  padding-bottom: 50px; /* 底部留位 */
 }
 
 h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #fff; }
@@ -29,21 +32,51 @@ h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #fff; }
   margin: 20px 0;
   border: 2px solid #444;
   background: #000;
-  overflow: hidden;
+  /* overflow: hidden;  <-- 移除呢個，因為放大鏡可能會超出邊界 */
   border-radius: 8px;
   min-height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none; /* 防止在 canvas 上滑動時觸發頁面滾動 */
 }
 
 canvas {
   max-width: 100%;
   height: auto;
   display: block;
+  /* 當選取模式時，隱藏鼠標，因為有放大鏡指引 */
+  cursor: crosshair; 
 }
 
-/* 提示文字 */
+/* --- 新增：放大鏡樣式 --- */
+.magnifier {
+  position: absolute;
+  pointer-events: none; /* 讓點擊穿透放大鏡，點到下面的 canvas */
+  border: 3px solid var(--accent-color);
+  border-radius: 50%;
+  background-color: #000;
+  background-repeat: no-repeat;
+  /* 放大鏡大小 */
+  width: 100px;
+  height: 100px;
+  /* 陰影提升層次感 */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+  z-index: 100;
+  /* 十字準星 (用 CSS 畫) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.magnifier::before, .magnifier::after {
+  content: '';
+  position: absolute;
+  background: var(--accent-color);
+}
+.magnifier::before { width: 2px; height: 20px; } /* 垂直線 */
+.magnifier::after { width: 20px; height: 2px; } /* 水平線 */
+
+
 .hint {
   position: absolute;
   bottom: 10px;
@@ -72,14 +105,15 @@ input[type=range] {
   width: 100%;
   -webkit-appearance: none;
   background: transparent;
+  margin: 10px 0; /* 增加滑桿上下空間方便手指拉動 */
 }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  height: 20px;
-  width: 20px;
+  height: 24px; /* 加大滑塊方便手指 */
+  width: 24px;
   border-radius: 50%;
   background: var(--accent-color);
-  margin-top: -8px;
+  margin-top: -10px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.5);
 }
 input[type=range]::-webkit-slider-runnable-track {
@@ -90,24 +124,26 @@ input[type=range]::-webkit-slider-runnable-track {
 }
 
 /* 按鈕樣式 */
-.btn-group { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center;}
+.btn-group { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; flex-wrap: wrap;}
 button {
-  flex: 1;
+  flex: 1 1 auto; /* 讓按鈕自動伸縮 */
+  min-width: 120px;
   padding: 12px;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
 }
 button.primary { background: var(--accent-color); color: white; }
 button.secondary { background: #444; color: #ccc; }
+button.success { background: #34c759; color: white; } /* 儲存按鈕顏色 */
 button.active { background: #ff9500; color: white; border: 2px solid #fff; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:active { transform: scale(0.98); }
 
-/* 上載按鈕隱藏 Input */
-.upload-btn-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%;}
+.upload-btn-wrapper { position: relative; overflow: hidden; display: inline-block; flex: 1 1 auto; min-width: 120px;}
 .upload-btn-wrapper input[type=file] {
   position: absolute;
   left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer;
