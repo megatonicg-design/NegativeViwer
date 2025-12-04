@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, ChangeEvent, PointerEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent, PointerEvent } from 'react';
 import './App.css';
 
 // 1. 定義數據類型 (Interfaces)
