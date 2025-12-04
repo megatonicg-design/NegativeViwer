@@ -193,27 +193,75 @@ export default function App() {
   };
 
   // 修正點：加入型別註解
-  const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
+  const renderChannelControl = (label, settingKey, color) => {
     const value = settings[settingKey];
     
-    // 修正點：加入 delta 的型別
-    const update = (delta: number) => {
+    const update = (delta) => {
       setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
     };
 
     return (
-      <div style={{display:'flex', flexDirection:'column', alignItems:'center', flex:1}}>
-        <span style={{color: color, fontSize:'0.8em', fontWeight:'bold', marginBottom:'2px'}}>{label}</span>
-        <div style={{display:'flex', alignItems:'center', background:'#222', borderRadius:'5px', padding:'2px'}}>
+      <div style={{
+        flex: 1,              // 讓 R, G, B 三個區塊平分寬度
+        minWidth: 0,          // 防止內容撐大導致溢出 (關鍵 CSS)
+        margin: '0 2px'       // 每個區塊之間只留極小空隙
+      }}>
+        {/* 標籤 (R/G/B) */}
+        <div style={{
+          color: color, 
+          fontSize:'0.75rem', 
+          fontWeight:'bold', 
+          marginBottom:'2px', 
+          textAlign:'center'
+        }}>
+          {label}
+        </div>
+
+        {/* 控制條本體 [ -  0  + ] */}
+        <div style={{
+          display:'flex', 
+          alignItems:'center', 
+          background:'#333',     // 深灰底色
+          borderRadius:'6px',    // 圓角
+          overflow: 'hidden'     // 確保按鈕背景不溢出
+        }}>
+          {/* 減號按鈕 */}
           <button 
-            style={{padding:'5px 10px', background:'transparent', color:'#fff', fontSize:'1.2em', lineHeight:1}}
+            style={{
+              flex: 1,           // 自動填滿
+              padding:'8px 0',   // 上下有空間，左右不設固定值
+              background:'transparent', 
+              color:'#fff', 
+              fontSize:'1.1rem',
+              lineHeight: 1,
+              cursor: 'pointer',
+              minWidth: '25px'   // 確保手指還按得到
+            }}
             onClick={() => update(-1)}
           >-</button>
           
-          <span style={{minWidth:'30px', textAlign:'center', fontSize:'0.9em', color:'#fff'}}>{value}</span>
+          {/* 數值顯示 */}
+          <span style={{
+            flex: 1,             // 數值佔據中間份額
+            textAlign:'center', 
+            fontSize:'0.85rem',  // 字體稍小防爆格
+            color:'#fff',
+            fontFamily: 'monospace', // 等寬字體，數字不會跳來跳去
+            userSelect: 'none'
+          }}>{value}</span>
           
+          {/* 加號按鈕 */}
           <button 
-            style={{padding:'5px 10px', background:'transparent', color:'#fff', fontSize:'1.2em', lineHeight:1}}
+            style={{
+              flex: 1,
+              padding:'8px 0',
+              background:'transparent', 
+              color:'#fff', 
+              fontSize:'1.1rem',
+              lineHeight: 1,
+              cursor: 'pointer',
+              minWidth: '25px'
+            }}
             onClick={() => update(1)}
           >+</button>
         </div>
@@ -348,7 +396,7 @@ export default function App() {
           {/* 1. 黑位 (Shadows) */}
           <div className="control-group">
             <label style={{color: '#aaa', fontSize:'0.9em', borderLeft:'3px solid #666', paddingLeft:'5px'}}>⚫ 黑位 (Shadows)</label>
-            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+            <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
               {renderChannelControl("R", "rShadow", "#ff6666")}
               {renderChannelControl("G", "gShadow", "#66ff66")}
               {renderChannelControl("B", "bShadow", "#6666ff")}
@@ -358,7 +406,7 @@ export default function App() {
           {/* 2. 中光位 (Midtones) - 新增 */}
           <div className="control-group" style={{marginTop:'15px'}}>
             <label style={{color: '#ccc', fontSize:'0.9em', borderLeft:'3px solid #999', paddingLeft:'5px'}}>🌗 整體平衡 (Midtones)</label>
-            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+            <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
               {renderChannelControl("R", "rMid", "#ff6666")}
               {renderChannelControl("G", "gMid", "#66ff66")}
               {renderChannelControl("B", "bMid", "#6666ff")}
@@ -368,7 +416,7 @@ export default function App() {
           {/* 3. 高光位 (Highlights) */}
           <div className="control-group" style={{marginTop:'15px'}}>
             <label style={{color: '#fff', fontSize:'0.9em', borderLeft:'3px solid #fff', paddingLeft:'5px'}}>⚪ 高光 (Highlights)</label>
-            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+            <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
               {renderChannelControl("R", "rHigh", "#ff6666")}
               {renderChannelControl("G", "gHigh", "#66ff66")}
               {renderChannelControl("B", "bHigh", "#6666ff")}
