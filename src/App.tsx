@@ -28,11 +28,17 @@ export default function App() {
   const [baseExposure, setBaseExposure] = useState<number>(1.1); 
 
   // 調色參數 (使用上面定義的 Interface)
-  const [settings, setSettings] = useState<Settings>({
+  const [settings, setSettings] = useState({
     brightness: 1.0,
     contrast: 1.1,
-    // 預設值
+    
+    // 1. 黑位 (Shadows / Lift)
     rShadow: 0, gShadow: 0, bShadow: 0,
+    
+    // 2. 中光位 (Midtones / Gamma) - 新增！
+    rMid: 0, gMid: 0, bMid: 0,
+
+    // 3. 高光位 (Highlights / Gain)
     rHigh: 0, gHigh: 0, bHigh: 0
   });
 
@@ -122,16 +128,25 @@ export default function App() {
       b = 255 - b;
 
       // C. 分離色調處理 (Split Toning)
-      
-      // 黑位 (Shadows) - 加減運算
-      r += rShadow;
-      g += gShadow;
-      b += bShadow;
+      // 1. 黑位修正 (Shadows / Lift) - 加減法
+      // 數值每加 1，像素值加 1
+      r += settings.rShadow;
+      g += settings.gShadow;
+      b += settings.bShadow;
 
-      // 高光 (Highlights) - 乘法運算 (百分比)
-      r *= (1 + rHigh / 100);
-      g *= (1 + gHigh / 100);
-      b *= (1 + bHigh / 100);
+      // 2. 高光修正 (Highlights / Gain) - 乘法
+      // 數值每加 1，放大 1%
+      r *= (1 + settings.rHigh / 100);
+      g *= (1 + settings.gHigh / 100);
+      b *= (1 + settings.bHigh / 100);
+
+      // 3. 中光位修正 (Midtones / Gamma) - 冪次方
+      // 這是調整「平衡」最強大的工具
+      // 數值 > 0 會變光/變強，數值 < 0 會變暗/變弱
+      // 為了效能，我們先將像素歸一化 (0-1)，做完 Gamma 再還原
+      if (settings.rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + settings.rMid / 50));
+      if (settings.gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + settings.gMid / 50));
+      if (settings.bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + settings.bMid / 50));
 
       // D. 亮度
       r *= brightness; g *= brightness; b *= brightness;
@@ -175,6 +190,36 @@ export default function App() {
     });
   };
 
+  const renderChannelControl = (label, settingKey, color) => {
+    const value = settings[settingKey];
+    
+    const update = (delta) => {
+      setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
+    };
+
+    return (
+      <div style={{display:'flex', flexDirection:'column', alignItems:'center', flex:1}}>
+        <span style={{color: color, fontSize:'0.8em', fontWeight:'bold', marginBottom:'2px'}}>{label}</span>
+        <div style={{display:'flex', alignItems:'center', background:'#222', borderRadius:'5px', padding:'2px'}}>
+          {/* 減號按鈕 */}
+          <button 
+            style={{padding:'5px 10px', background:'transparent', color:'#fff', fontSize:'1.2em', lineHeight:1}}
+            onClick={() => update(-1)}
+          >-</button>
+          
+          {/* 數值顯示 */}
+          <span style={{minWidth:'30px', textAlign:'center', fontSize:'0.9em', color:'#fff'}}>{value}</span>
+          
+          {/* 加號按鈕 */}
+          <button 
+            style={{padding:'5px 10px', background:'transparent', color:'#fff', fontSize:'1.2em', lineHeight:1}}
+            onClick={() => update(1)}
+          >+</button>
+        </div>
+      </div>
+    );
+  };
+
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isPickingBase || !originalDataRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -206,7 +251,8 @@ export default function App() {
       brightness: 1.0, 
       contrast: 1.1, 
       rShadow: 0, gShadow: 0, bShadow: 0, 
-      rHigh: 0, gHigh: 0, bHigh: 0 
+      rHigh: 0, gHigh: 0, bHigh: 0, 
+      rMid: 0, gMid: 0, bMid: 0,
     });
   };
 
@@ -300,41 +346,33 @@ export default function App() {
           
           <hr style={{borderColor:'#444', margin:'15px 0'}}/>
 
-          {/* 區域 1：暗部/黑位 (Shadows) */}
+          {/* 1. 黑位 (Shadows) */}
           <div className="control-group">
-            <label style={{fontSize: '0.9em', color: '#aaa', marginBottom:'5px'}}>⚫ 黑位修正 (Shadows)</label>
-            <div style={{display:'flex', gap:'5px'}}>
-              <div style={{flex:1}}>
-                <label style={{color:'#ff6666', fontSize:'0.8em'}}>R</label>
-                <input type="range" min="-60" max="60" step="1" value={settings.rShadow} onChange={e => handleSlider('rShadow', e.target.value)} />
-              </div>
-              <div style={{flex:1}}>
-                <label style={{color:'#66ff66', fontSize:'0.8em'}}>G</label>
-                <input type="range" min="-60" max="60" step="1" value={settings.gShadow} onChange={e => handleSlider('gShadow', e.target.value)} />
-              </div>
-              <div style={{flex:1}}>
-                <label style={{color:'#6666ff', fontSize:'0.8em'}}>B</label>
-                <input type="range" min="-60" max="60" step="1" value={settings.bShadow} onChange={e => handleSlider('bShadow', e.target.value)} />
-              </div>
+            <label style={{color: '#aaa', fontSize:'0.9em', borderLeft:'3px solid #666', paddingLeft:'5px'}}>⚫ 黑位 (Shadows)</label>
+            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+              {renderChannelControl("R", "rShadow", "#ff6666")}
+              {renderChannelControl("G", "gShadow", "#66ff66")}
+              {renderChannelControl("B", "bShadow", "#6666ff")}
             </div>
           </div>
 
-          {/* 區域 2：亮部/高光 (Highlights) */}
-          <div className="control-group" style={{marginTop:'10px'}}>
-            <label style={{fontSize: '0.9em', color: '#aaa', marginBottom:'5px'}}>⚪ 高光修正 (Highlights)</label>
-            <div style={{display:'flex', gap:'5px'}}>
-              <div style={{flex:1}}>
-                <label style={{color:'#ff6666', fontSize:'0.8em'}}>R</label>
-                <input type="range" min="-50" max="50" step="1" value={settings.rHigh} onChange={e => handleSlider('rHigh', e.target.value)} />
-              </div>
-              <div style={{flex:1}}>
-                <label style={{color:'#66ff66', fontSize:'0.8em'}}>G</label>
-                <input type="range" min="-50" max="50" step="1" value={settings.gHigh} onChange={e => handleSlider('gHigh', e.target.value)} />
-              </div>
-              <div style={{flex:1}}>
-                <label style={{color:'#6666ff', fontSize:'0.8em'}}>B</label>
-                <input type="range" min="-50" max="50" step="1" value={settings.bHigh} onChange={e => handleSlider('bHigh', e.target.value)} />
-              </div>
+          {/* 2. 中光位 (Midtones) - 新增 */}
+          <div className="control-group" style={{marginTop:'15px'}}>
+            <label style={{color: '#ccc', fontSize:'0.9em', borderLeft:'3px solid #999', paddingLeft:'5px'}}>🌗 整體平衡 (Midtones)</label>
+            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+              {renderChannelControl("R", "rMid", "#ff6666")}
+              {renderChannelControl("G", "gMid", "#66ff66")}
+              {renderChannelControl("B", "bMid", "#6666ff")}
+            </div>
+          </div>
+
+          {/* 3. 高光位 (Highlights) */}
+          <div className="control-group" style={{marginTop:'15px'}}>
+            <label style={{color: '#fff', fontSize:'0.9em', borderLeft:'3px solid #fff', paddingLeft:'5px'}}>⚪ 高光 (Highlights)</label>
+            <div style={{display:'flex', gap:'5px', marginTop:'5px'}}>
+              {renderChannelControl("R", "rHigh", "#ff6666")}
+              {renderChannelControl("G", "gHigh", "#66ff66")}
+              {renderChannelControl("B", "bHigh", "#6666ff")}
             </div>
           </div>
 
