@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
-// 1. 定義 Settings 的型別介面 (解決 TypeScript 報錯的核心)
+// 1. 補全 Settings 的型別介面 (加入之前漏掉的 Midtones)
 interface Settings {
   brightness: number;
   contrast: number;
@@ -9,6 +9,10 @@ interface Settings {
   rShadow: number;
   gShadow: number;
   bShadow: number;
+  // 中光位 (Midtones) - 之前漏了這部分導致報錯
+  rMid: number;
+  gMid: number;
+  bMid: number;
   // 高光 (Highlights)
   rHigh: number;
   gHigh: number;
@@ -27,15 +31,15 @@ export default function App() {
   // 掃描曝光
   const [baseExposure, setBaseExposure] = useState<number>(1.1); 
 
-  // 調色參數 (使用上面定義的 Interface)
-  const [settings, setSettings] = useState({
+  // 調色參數 (明確指定泛型 <Settings> 以確保型別安全)
+  const [settings, setSettings] = useState<Settings>({
     brightness: 1.0,
     contrast: 1.1,
     
     // 1. 黑位 (Shadows / Lift)
     rShadow: 0, gShadow: 0, bShadow: 0,
     
-    // 2. 中光位 (Midtones / Gamma) - 新增！
+    // 2. 中光位 (Midtones / Gamma)
     rMid: 0, gMid: 0, bMid: 0,
 
     // 3. 高光位 (Highlights / Gain)
@@ -107,10 +111,11 @@ export default function App() {
 
     const { r: baseR, g: baseG, b: baseB } = baseColor;
     
-    // 這裡修正了解構賦值，不再使用 rBal/gBal
+    // 修正點：這裡解構了變數，就要在下面使用它們，否則會報錯
     const { 
       brightness, contrast, 
       rShadow, gShadow, bShadow, 
+      rMid, gMid, bMid, // 記得這裡也要解構 Midtones
       rHigh, gHigh, bHigh 
     } = settings;
 
@@ -128,25 +133,22 @@ export default function App() {
       b = 255 - b;
 
       // C. 分離色調處理 (Split Toning)
-      // 1. 黑位修正 (Shadows / Lift) - 加減法
-      // 數值每加 1，像素值加 1
-      r += settings.rShadow;
-      g += settings.gShadow;
-      b += settings.bShadow;
+      
+      // 1. 黑位修正 (Shadows / Lift)
+      // 修正點：改用解構出來的變數 (rShadow) 而不是 settings.rShadow
+      r += rShadow;
+      g += gShadow;
+      b += bShadow;
 
-      // 2. 高光修正 (Highlights / Gain) - 乘法
-      // 數值每加 1，放大 1%
-      r *= (1 + settings.rHigh / 100);
-      g *= (1 + settings.gHigh / 100);
-      b *= (1 + settings.bHigh / 100);
+      // 2. 高光修正 (Highlights / Gain)
+      r *= (1 + rHigh / 100);
+      g *= (1 + gHigh / 100);
+      b *= (1 + bHigh / 100);
 
-      // 3. 中光位修正 (Midtones / Gamma) - 冪次方
-      // 這是調整「平衡」最強大的工具
-      // 數值 > 0 會變光/變強，數值 < 0 會變暗/變弱
-      // 為了效能，我們先將像素歸一化 (0-1)，做完 Gamma 再還原
-      if (settings.rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + settings.rMid / 50));
-      if (settings.gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + settings.gMid / 50));
-      if (settings.bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + settings.bMid / 50));
+      // 3. 中光位修正 (Midtones / Gamma)
+      if (rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + rMid / 50));
+      if (gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + gMid / 50));
+      if (bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + bMid / 50));
 
       // D. 亮度
       r *= brightness; g *= brightness; b *= brightness;
@@ -190,10 +192,12 @@ export default function App() {
     });
   };
 
-  const renderChannelControl = (label, settingKey, color) => {
+  // 修正點：加入型別註解
+  const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
     const value = settings[settingKey];
     
-    const update = (delta) => {
+    // 修正點：加入 delta 的型別
+    const update = (delta: number) => {
       setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
     };
 
@@ -201,16 +205,13 @@ export default function App() {
       <div style={{display:'flex', flexDirection:'column', alignItems:'center', flex:1}}>
         <span style={{color: color, fontSize:'0.8em', fontWeight:'bold', marginBottom:'2px'}}>{label}</span>
         <div style={{display:'flex', alignItems:'center', background:'#222', borderRadius:'5px', padding:'2px'}}>
-          {/* 減號按鈕 */}
           <button 
             style={{padding:'5px 10px', background:'transparent', color:'#fff', fontSize:'1.2em', lineHeight:1}}
             onClick={() => update(-1)}
           >-</button>
           
-          {/* 數值顯示 */}
           <span style={{minWidth:'30px', textAlign:'center', fontSize:'0.9em', color:'#fff'}}>{value}</span>
           
-          {/* 加號按鈕 */}
           <button 
             style={{padding:'5px 10px', background:'transparent', color:'#fff', fontSize:'1.2em', lineHeight:1}}
             onClick={() => update(1)}
@@ -245,7 +246,6 @@ export default function App() {
     setIsPickingBase(false);
   };
 
-  // 修正了 Reset 邏輯，使用新的 key
   const resetSettings = () => {
     setSettings({ 
       brightness: 1.0, 
@@ -264,7 +264,6 @@ export default function App() {
     link.click();
   };
 
-  // 這裡使用了 keyof Settings 確保型別安全
   const handleSlider = (key: keyof Settings, val: string) => {
     setSettings(prev => ({ ...prev, [key]: parseFloat(val) }));
   };
