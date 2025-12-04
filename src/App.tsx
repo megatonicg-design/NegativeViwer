@@ -1,9 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, ChangeEvent, PointerEvent } from 'react';
 import './App.css';
 
-// --- 定義類型介面 (Interfaces) ---
-// 這些告訴 TypeScript 我們的物件長什麼樣子
-interface RGB {
+// 1. 定義數據類型 (Interfaces)
+interface BaseColor {
   r: number;
   g: number;
   b: number;
@@ -32,98 +31,92 @@ export default function App() {
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
   const [isPickingBase, setIsPickingBase] = useState<boolean>(false);
   
-  // 預設片基顏色
-  const [baseColor, setBaseColor] = useState<RGB>({ r: 230, g: 160, b: 130 }); 
+  // 1. 預設片基顏色
+  const defaultBaseColor: BaseColor = { r: 240, g: 170, b: 140 };
+  const [baseColor, setBaseColor] = useState<BaseColor>(defaultBaseColor); 
   
+  // 2. 掃描曝光
+  const [baseExposure, setBaseExposure] = useState<number>(1.1); 
+
   // 調色參數
   const [settings, setSettings] = useState<Settings>({
     brightness: 1.0,
     contrast: 1.1,
-    rBal: 0, gBal: 0, bBal: 0
+    rBal: 0,
+    gBal: 0,
+    bBal: 0
   });
 
   // 放大鏡狀態
   const [magnifierState, setMagnifierState] = useState<MagnifierState>({
-    show: false,
-    x: 0, y: 0,
-    bgX: 0, bgY: 0,
-    bgWidth: 0, bgHeight: 0
+    show: false, x: 0, y: 0, bgX: 0, bgY: 0, bgWidth: 0, bgHeight: 0
   });
 
-  // --- Refs (修正重點：加上明確的 HTML 類型) ---
+  // --- Refs (修正 TypeScript 類型定義) ---
+  // 明確指出 ref 會存放咩類型嘅 DOM 元素
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const originalDataRef = useRef<ImageData | null>(null); 
+  const originalDataRef = useRef<ImageData | null>(null);
   const previewUrlRef = useRef<string>('');
 
-  // 監聽參數變化 -> 重新處理圖片
   useEffect(() => {
-    if (imageLoaded) {
-      processImage();
-    }
+    if (imageLoaded) processImage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseColor, settings, imageLoaded]);
+  }, [baseColor, baseExposure, settings, imageLoaded]);
 
-  // --- 1. 圖片上載/拍攝處理 ---
-  // 修正：為事件 e 加上類型 React.ChangeEvent
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    const file = files[0];
+  // --- 處理圖片上載 ---
+  // 加入 ChangeEvent 類型
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; // 使用 Optional chaining
+    if (!file) return;
+
     const reader = new FileReader();
-    
-    reader.onload = (event: ProgressEvent<FileReader>) => {
-      // 修正：檢查 result 是否存在且為字串
-      const result = event.target?.result;
-      if (typeof result === 'string') {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = canvasRef.current;
-          // 修正：檢查 canvas 是否為 null
-          if (!canvas) return;
+    reader.onload = (event) => {
+      // 確保 result 係 string
+      const result = event.target?.result as string; 
+      if (!result) return;
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
-          
-          const maxWidth = 1000; 
-          const scale = Math.min(1, maxWidth / img.width);
-          canvas.width = img.width * scale;
-          canvas.height = img.height * scale;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return; // Null check
 
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          
-          // 修正：加上類型斷言或確保不為 null
-          originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          
-          setImageLoaded(true);
-          setIsPickingBase(false);
-          resetSettings();
-          
-          setTimeout(processImage, 50);
-        };
-        img.src = result;
-      }
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const maxWidth = 1000;
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // 儲存原始數據
+        originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        setImageLoaded(true);
+        setBaseColor(defaultBaseColor);
+        setBaseExposure(1.1); 
+        resetSettings();
+        setIsPickingBase(false);
+        
+        setTimeout(processImage, 50);
+      };
+      img.src = result;
     };
     reader.readAsDataURL(file);
   };
 
-  // --- 2. 核心影像處理 ---
+  // --- 核心影像處理 ---
   const processImage = () => {
-    // 修正：嚴格檢查 Ref 是否存在
     if (!originalDataRef.current || !canvasRef.current) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const width = originalDataRef.current.width;
-    const height = originalDataRef.current.height;
-    
-    // 複製數據以避免修改原圖
     const newData = new ImageData(
       new Uint8ClampedArray(originalDataRef.current.data),
-      width,
-      height
+      originalDataRef.current.width,
+      originalDataRef.current.height
     );
     const data = newData.data;
 
@@ -131,14 +124,12 @@ export default function App() {
     const { brightness, contrast, rBal, gBal, bBal } = settings;
 
     for (let i = 0; i < data.length; i += 4) {
-      let r = data[i];
-      let g = data[i+1];
-      let b = data[i+2];
+      let r = data[i]; let g = data[i+1]; let b = data[i+2];
 
-      // A. 去色罩
-      r = baseR > 10 ? (r / baseR) * 255 : r;
-      g = baseG > 10 ? (g / baseG) * 255 : g;
-      b = baseB > 10 ? (b / baseB) * 255 : b;
+      // A. 去色罩 + 曝光補償
+      r = baseR > 10 ? (r / baseR) * 255 * baseExposure : r;
+      g = baseG > 10 ? (g / baseG) * 255 * baseExposure : g;
+      b = baseB > 10 ? (b / baseB) * 255 * baseExposure : b;
 
       // B. 反轉
       r = 255 - r;
@@ -156,75 +147,69 @@ export default function App() {
       g = contrast * (g - 128) + 128;
       b = contrast * (b - 128) + 128;
 
-      data[i] = r;
-      data[i+1] = g;
-      data[i+2] = b;
+      data[i] = r; data[i+1] = g; data[i+2] = b;
     }
-
     ctx.putImageData(newData, 0, 0);
     previewUrlRef.current = canvas.toDataURL(); 
   };
 
-  // --- 3. 放大鏡座標計算 ---
-  // 修正：使用 React.PointerEvent 類型
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  // --- 放大鏡與座標計算 ---
+  // 加入 PointerEvent 類型
+  const handlePointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
     if (!isPickingBase || !canvasRef.current) return;
-
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-
     const pointerX = e.clientX - rect.left;
     const pointerY = e.clientY - rect.top;
 
     if (pointerX < 0 || pointerY < 0 || pointerX > rect.width || pointerY > rect.height) {
-        setMagnifierState(s => ({ ...s, show: false }));
-        return;
+        setMagnifierState(s => ({ ...s, show: false })); return;
     }
 
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     const actualX = pointerX * scaleX;
     const actualY = pointerY * scaleY;
 
-    const zoom = 3;   
-    const size = 120; 
-
+    const zoom = 3; 
+    const size = 120;
     const bgX = -((actualX * zoom) - (size / 2));
     const bgY = -((actualY * zoom) - (size / 2));
 
     setMagnifierState({
-      show: true,
-      x: pointerX - (size / 2),     
-      y: pointerY - size - 30,      
-      bgX, bgY,
-      bgWidth: canvas.width * zoom,
-      bgHeight: canvas.height * zoom
+      show: true, x: pointerX - (size / 2), y: pointerY - size - 30,
+      bgX, bgY, bgWidth: canvas.width * zoom, bgHeight: canvas.height * zoom
     });
   };
 
-  // --- 4. 點擊選取顏色 ---
-  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerUp = (e: PointerEvent<HTMLCanvasElement>) => {
     if (!isPickingBase || !originalDataRef.current || !canvasRef.current) return;
-
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     const x = Math.floor((e.clientX - rect.left) * scaleX);
     const y = Math.floor((e.clientY - rect.top) * scaleY);
 
     const index = (y * canvas.width + x) * 4;
     const data = originalDataRef.current.data;
 
-    // 確保有數據才讀取
-    if (data && data[index] !== undefined) {
+    if (data[index] !== undefined) {
       setBaseColor({ r: data[index], g: data[index+1], b: data[index+2] });
-      setIsPickingBase(false); 
+      setIsPickingBase(false);
       setMagnifierState(s => ({ ...s, show: false }));
     }
+  };
+
+  // --- 功能按鈕 ---
+  const resetBase = () => {
+    setBaseColor(defaultBaseColor);
+    setBaseExposure(1.1); 
+    setIsPickingBase(false);
+  };
+
+  const resetSettings = () => {
+    setSettings({ brightness: 1.0, contrast: 1.1, rBal: 0, gBal: 0, bBal: 0 });
   };
 
   const handleSave = () => {
@@ -235,19 +220,16 @@ export default function App() {
     link.click();
   };
 
-  const resetSettings = () => {
-    setSettings({ brightness: 1.0, contrast: 1.1, rBal: 0, gBal: 0, bBal: 0 });
-  };
-
-  // 修正：明確指定 key 為 Settings 的 key
+  // 限制 key 必須係 Settings 裡面嘅屬性名
   const handleSlider = (key: keyof Settings, val: string) => {
     setSettings(prev => ({ ...prev, [key]: parseFloat(val) }));
   };
 
   return (
     <div className="container">
-      <h1>🎞️ 菲林預覽室 (TS 版)</h1>
+      <h1>🎞️ 菲林預覽室</h1>
 
+      {/* 上載與儲存 */}
       <div className="btn-group">
         <div className="upload-btn-wrapper">
           <button className="primary">📸 拍攝 / 上載</button>
@@ -256,51 +238,45 @@ export default function App() {
         <button className="success" onClick={handleSave} disabled={!imageLoaded}>💾 儲存</button>
       </div>
 
+      {/* 片基校正區 */}
       <div className="btn-group">
          <button 
            className={`secondary ${isPickingBase ? 'active' : ''}`}
            onClick={() => setIsPickingBase(!isPickingBase)}
            disabled={!imageLoaded}
+           style={{flex: 2}}
          >
-           {isPickingBase ? '👆 請按住畫面選取橙色邊緣' : '🎨 1. 校正片基 (去色罩)'}
+           {isPickingBase ? '👆 請按住畫面選取' : '🎨 1. 校正片基 (去色罩)'}
          </button>
-         <button className="secondary" onClick={resetSettings} disabled={!imageLoaded}>🔄 重置</button>
+         <button className="secondary" onClick={resetBase} disabled={!imageLoaded}>↩️ 還原片基</button>
       </div>
 
+      {/* 畫布 */}
       <div className="canvas-wrapper">
         <canvas 
           ref={canvasRef}
           onPointerDown={handlePointerMove}
           onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}     
+          onPointerUp={handlePointerUp}
           onPointerLeave={() => setMagnifierState(s => ({...s, show: false}))}
         />
         
         {!imageLoaded && <div className="hint">請先拍攝燈箱上的負片</div>}
 
-        {/* 放大鏡組件 */}
+        {/* 放大鏡 */}
         {isPickingBase && magnifierState.show && (
           <div className="magnifier" style={{
-            top: magnifierState.y,
-            left: magnifierState.x,
-            width: '120px',
-            height: '120px',
+            top: magnifierState.y, left: magnifierState.x,
+            width: '120px', height: '120px',
             backgroundImage: `url(${previewUrlRef.current})`,
             backgroundSize: `${magnifierState.bgWidth}px ${magnifierState.bgHeight}px`,
             backgroundPosition: `${magnifierState.bgX}px ${magnifierState.bgY}px`,
-            position: 'absolute',
-            borderRadius: '50%',
-            border: '3px solid #fff',
-            boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
-            pointerEvents: 'none',
-            zIndex: 100,
-            overflow: 'hidden'
+            position: 'absolute', borderRadius: '50%', border: '3px solid #fff',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.5)', pointerEvents: 'none', zIndex: 100
           }}>
-            <div style={{
-               position: 'absolute', top: '50%', left: '50%', 
-               width: '14px', height: '14px',
-               transform: 'translate(-50%, -50%)',
-               pointerEvents: 'none'
+             <div style={{
+               position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+               width: '14px', height: '14px', pointerEvents: 'none'
             }}>
                <div style={{position:'absolute', top:'6px', left:'0', width:'14px', height:'2px', background:'red'}}></div>
                <div style={{position:'absolute', top:'0', left:'6px', width:'2px', height:'14px', background:'red'}}></div>
@@ -309,14 +285,23 @@ export default function App() {
         )}
       </div>
 
+      {/* 控制區 */}
       {imageLoaded && (
         <div className="controls">
+          <div className="control-group" style={{background: '#333', padding: '10px', borderRadius: '8px', marginBottom: '15px'}}>
+            <label style={{color: '#ffcc00'}}>🔦 掃描曝光 (去色罩後過黑請拉此)</label>
+            <input type="range" min="0.5" max="3.0" step="0.1" 
+              value={baseExposure} 
+              onChange={e => setBaseExposure(parseFloat(e.target.value))} 
+            />
+          </div>
+
           <div className="control-group">
-            <label>☀️ 亮度</label>
-            <input type="range" min="0.5" max="2.5" step="0.05" value={settings.brightness} onChange={e => handleSlider('brightness', e.target.value)} />
+            <label>☀️ 整體亮度 (Brightness)</label>
+            <input type="range" min="0.5" max="2.0" step="0.05" value={settings.brightness} onChange={e => handleSlider('brightness', e.target.value)} />
           </div>
           <div className="control-group">
-            <label>◐ 對比度</label>
+            <label>◐ 對比度 (Contrast)</label>
             <input type="range" min="0.5" max="2.0" step="0.05" value={settings.contrast} onChange={e => handleSlider('contrast', e.target.value)} />
           </div>
           
@@ -333,6 +318,10 @@ export default function App() {
           <div className="control-group">
             <label style={{color:'#6666ff'}}>B 藍色平衡</label>
             <input type="range" min="-100" max="100" step="2" value={settings.bBal} onChange={e => handleSlider('bBal', e.target.value)} />
+          </div>
+          
+          <div className="control-group" style={{textAlign:'center', marginTop: '20px'}}>
+             <button className="secondary" onClick={resetSettings}>🔄 重置調色參數</button>
           </div>
         </div>
       )}
