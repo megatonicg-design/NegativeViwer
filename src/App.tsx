@@ -193,18 +193,22 @@ export default function App() {
   };
 
   // 修正點：加入型別註解
-  const renderChannelControl = (label, settingKey, color) => {
+  // label: 顯示文字 (字串)
+  // settingKey: 必須是 Settings 介面中定義的鍵 (keyof Settings)
+  // color: 顏色代碼 (字串)
+  const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
     const value = settings[settingKey];
     
-    const update = (delta) => {
+    // delta: 增減的數值 (數字)
+    const update = (delta: number) => {
       setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
     };
 
     return (
       <div style={{
-        flex: 1,              // 讓 R, G, B 三個區塊平分寬度
-        minWidth: 0,          // 防止內容撐大導致溢出 (關鍵 CSS)
-        margin: '0 2px'       // 每個區塊之間只留極小空隙
+        flex: 1,              
+        minWidth: 0,          
+        margin: '0 2px'       
       }}>
         {/* 標籤 (R/G/B) */}
         <div style={{
@@ -217,36 +221,36 @@ export default function App() {
           {label}
         </div>
 
-        {/* 控制條本體 [ -  0  + ] */}
+        {/* 控制條本體 */}
         <div style={{
           display:'flex', 
           alignItems:'center', 
-          background:'#333',     // 深灰底色
-          borderRadius:'6px',    // 圓角
-          overflow: 'hidden'     // 確保按鈕背景不溢出
+          background:'#333',     
+          borderRadius:'6px',    
+          overflow: 'hidden'     
         }}>
           {/* 減號按鈕 */}
           <button 
             style={{
-              flex: 1,           // 自動填滿
-              padding:'8px 0',   // 上下有空間，左右不設固定值
+              flex: 1,           
+              padding:'8px 0',   
               background:'transparent', 
               color:'#fff', 
               fontSize:'1.1rem',
               lineHeight: 1,
               cursor: 'pointer',
-              minWidth: '25px'   // 確保手指還按得到
+              minWidth: '25px'   
             }}
             onClick={() => update(-1)}
           >-</button>
           
           {/* 數值顯示 */}
           <span style={{
-            flex: 1,             // 數值佔據中間份額
+            flex: 1,             
             textAlign:'center', 
-            fontSize:'0.85rem',  // 字體稍小防爆格
+            fontSize:'0.85rem',  
             color:'#fff',
-            fontFamily: 'monospace', // 等寬字體，數字不會跳來跳去
+            fontFamily: 'monospace', 
             userSelect: 'none'
           }}>{value}</span>
           
