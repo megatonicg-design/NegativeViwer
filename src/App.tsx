@@ -56,44 +56,59 @@ export default function App() {
 
   // --- 處理圖片上載 ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]; // 使用 Optional Chaining (?.)
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+      // 修正錯誤：'event.target' is possibly 'null' 及 'Type mismatch'
+      // 我們直接檢查 result 是否為 string
+      const result = event.target?.result;
+      
+      if (typeof result === 'string') {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = canvasRef.current;
+          // 修正錯誤：'canvas' is possibly 'null'
+          if (!canvas) return;
 
-        const maxWidth = 1000;
-        const scale = Math.min(1, maxWidth / img.width);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
-        setImageLoaded(true);
-        // 重置
-        setBaseColor(defaultBaseColor);
-        setBaseExposure(1.1); 
-        resetSettings();
-        setIsPickingBase(false);
-        
-        setTimeout(processImage, 50);
-      };
-      img.src = event.target?.result as string;
+          const ctx = canvas.getContext('2d');
+          // 修正錯誤：'ctx' is possibly 'null'
+          if (!ctx) return;
+          
+          // 現在 TS 知道 canvas 和 ctx 一定存在，不會報錯了
+          canvas.width = img.width;
+          canvas.height = img.height;
+
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          
+          originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          
+          setImageLoaded(true);
+          setBaseColor(defaultBaseColor);
+          setBaseExposure(1.1); 
+          resetSettings();
+          setIsPickingBase(false);
+          
+          setTimeout(processImage, 50);
+        };
+        img.src = result;
+      }
     };
     reader.readAsDataURL(file);
   };
 
   // --- 核心影像處理 ---
   const processImage = () => {
-    if (!originalDataRef.current || !canvasRef.current) return;
+    // 檢查 originalDataRef 是否有東西
+    if (!originalDataRef.current) return;
+    
     const canvas = canvasRef.current;
+    // 修正錯誤：'canvas' is possibly 'null'
+    if (!canvas) return;
+
     const ctx = canvas.getContext('2d');
+    // 修正錯誤：'ctx' is possibly 'null'
     if (!ctx) return;
     
     const newData = new ImageData(
