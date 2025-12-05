@@ -305,37 +305,44 @@ export default function App() {
     // --- 參數設定 ---
     
     const opacity = 0.45; 
+    
+    // [修改 1] 改為根據「寬度」計算大小，解決不同相機比例問題
+    // 0.045 代表字體大小是圖片寬度的 4.5%
     const sizeScaleFactor = 0.020; 
-    const bottomPaddingScale = 0.008;
+    
+    // [修改 2] 距離底部的距離，同樣改用寬度做基準
+    const bottomPaddingScale = 0.05; 
+
+    // [修改 3] 強制使用 Arial 字體，解決 iOS/Android 行高差異
+    const fontFamily = 'Arial, Helvetica, sans-serif'; 
 
     const line1Text = "Filter by:";
     const line2Text = "Megatoni Production";
 
-    // *** 這裡定義了變數 ***
-    const fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-    const fontStyle = 'bold'; 
-
     // ===========================================
 
     // 計算字體大小
-    const fontSize = Math.max(20, Math.floor(saveCanvas.height * sizeScaleFactor));
+    // 計算字體大小 (改用 Width 做基準)
+    const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
     const lineHeight = fontSize * 1.3;
 
-    // *** 修正重點：這裡必須用到上面的 fontStyle 和 fontFamily ***
-    // 之前可能寫死咗做 `bold ${fontSize}px -apple-system...`，導致上面的變數無人用
-    saveCtx.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
-    
+    // 設定畫筆
+    saveCtx.font = `bold ${fontSize}px ${fontFamily}`; // 使用 Arial
     saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
     saveCtx.textAlign = 'center';
     saveCtx.textBaseline = 'bottom';
 
+    // 加入陰影
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    saveCtx.shadowBlur = 2;
-    saveCtx.shadowOffsetX = 2;
+    saveCtx.shadowBlur = 4;
+    saveCtx.shadowOffsetX = 0;
     saveCtx.shadowOffsetY = 2;
 
+    // 計算位置
     const x = saveCanvas.width / 2;
-    const paddingBottom = Math.floor(saveCanvas.height * bottomPaddingScale);
+    
+    // [修改 4] 底部邊距也用 Width 計算，確保位置一致
+    const paddingBottom = Math.floor(saveCanvas.width * bottomPaddingScale);
     const y = saveCanvas.height - paddingBottom;
 
     // 繪製文字
