@@ -320,7 +320,7 @@ export default function App() {
     // [C] 字體大小比例 (Size Scale)
     // 0.035 代表字高佔畫面總高度的 3.5%。
     // 想字大啲就改做 0.05，細啲就 0.025
-    const sizeScaleFactor = 0.035;
+    const sizeScaleFactor = 0.010;
 
     // [D] 文字內容 (分兩行定義)
     const line1Text = "Filter by:";
