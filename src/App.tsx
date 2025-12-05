@@ -320,7 +320,7 @@ export default function App() {
     // [C] 字體大小比例 (Size Scale)
     // 0.035 代表字高佔畫面總高度的 3.5%。
     // 想字大啲就改做 0.05，細啲就 0.025
-    const sizeScaleFactor = 0.010;
+    const sizeScaleFactor = 0.015;
 
     // [D] 文字內容 (分兩行定義)
     const line1Text = "Filter by:";
@@ -338,14 +338,14 @@ export default function App() {
     saveCtx.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
     // 使用模板字符串插入上面設定的 opacity
     saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-    saveCtx.textAlign = 'right';    // 對齊右邊
+    saveCtx.textAlign = 'center';    // 對齊右邊
     saveCtx.textBaseline = 'bottom'; // 對齊底部基準線
 
     // 加入陰影 (增加清晰度，數值可不改)
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.8)'; // 陰影深色一點配合透明文字
     saveCtx.shadowBlur = 4;
-    saveCtx.shadowOffsetX = 2;
-    saveCtx.shadowOffsetY = 2;
+    saveCtx.shadowOffsetX = 8;
+    saveCtx.shadowOffsetY = 8;
 
     // 計算位置
     const padding = Math.floor(fontSize / 1.5); // 邊距
