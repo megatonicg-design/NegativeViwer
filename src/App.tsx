@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
-// 1. 補全 Settings 的型別介面 (加入之前漏掉的 Midtones)
+// 1. 定義 Settings 介面
 interface Settings {
   brightness: number;
   contrast: number;
@@ -9,7 +9,7 @@ interface Settings {
   rShadow: number;
   gShadow: number;
   bShadow: number;
-  // 中光位 (Midtones) - 之前漏了這部分導致報錯
+  // 中光位 (Midtones)
   rMid: number;
   gMid: number;
   bMid: number;
@@ -31,18 +31,12 @@ export default function App() {
   // 掃描曝光
   const [baseExposure, setBaseExposure] = useState<number>(1.1); 
 
-  // 調色參數 (明確指定泛型 <Settings> 以確保型別安全)
+  // 調色參數
   const [settings, setSettings] = useState<Settings>({
     brightness: 1.0,
     contrast: 1.1,
-    
-    // 1. 黑位 (Shadows / Lift)
     rShadow: 0, gShadow: 0, bShadow: 0,
-    
-    // 2. 中光位 (Midtones / Gamma)
     rMid: 0, gMid: 0, bMid: 0,
-
-    // 3. 高光位 (Highlights / Gain)
     rHigh: 0, gHigh: 0, bHigh: 0
   });
 
@@ -110,12 +104,10 @@ export default function App() {
     const data = newData.data;
 
     const { r: baseR, g: baseG, b: baseB } = baseColor;
-    
-    // 修正點：這裡解構了變數，就要在下面使用它們，否則會報錯
     const { 
       brightness, contrast, 
       rShadow, gShadow, bShadow, 
-      rMid, gMid, bMid, // 記得這裡也要解構 Midtones
+      rMid, gMid, bMid, 
       rHigh, gHigh, bHigh 
     } = settings;
 
@@ -132,20 +124,16 @@ export default function App() {
       g = 255 - g;
       b = 255 - b;
 
-      // C. 分離色調處理 (Split Toning)
-      
-      // 1. 黑位修正 (Shadows / Lift)
-      // 修正點：改用解構出來的變數 (rShadow) 而不是 settings.rShadow
-      r += rShadow;
-      g += gShadow;
-      b += bShadow;
+      // C. 分離色調處理
+      // 1. 黑位
+      r += rShadow; g += gShadow; b += bShadow;
 
-      // 2. 高光修正 (Highlights / Gain)
+      // 2. 高光
       r *= (1 + rHigh / 100);
       g *= (1 + gHigh / 100);
       b *= (1 + bHigh / 100);
 
-      // 3. 中光位修正 (Midtones / Gamma)
+      // 3. 中光位
       if (rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + rMid / 50));
       if (gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + gMid / 50));
       if (bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + bMid / 50));
@@ -192,14 +180,10 @@ export default function App() {
     });
   };
 
-  // 修正點：加入型別註解
-  // label: 顯示文字 (字串)
-  // settingKey: 必須是 Settings 介面中定義的鍵 (keyof Settings)
-  // color: 顏色代碼 (字串)
+  // 輔助函數：渲染加減按鈕
   const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
     const value = settings[settingKey];
     
-    // delta: 增減的數值 (數字)
     const update = (delta: number) => {
       setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
     };
@@ -210,7 +194,6 @@ export default function App() {
         minWidth: 0,          
         margin: '0 2px'       
       }}>
-        {/* 標籤 (R/G/B) */}
         <div style={{
           color: color, 
           fontSize:'0.75rem', 
@@ -221,7 +204,6 @@ export default function App() {
           {label}
         </div>
 
-        {/* 控制條本體 */}
         <div style={{
           display:'flex', 
           alignItems:'center', 
@@ -229,7 +211,6 @@ export default function App() {
           borderRadius:'6px',    
           overflow: 'hidden'     
         }}>
-          {/* 減號按鈕 */}
           <button 
             style={{
               flex: 1,           
@@ -244,7 +225,6 @@ export default function App() {
             onClick={() => update(-1)}
           >-</button>
           
-          {/* 數值顯示 */}
           <span style={{
             flex: 1,             
             textAlign:'center', 
@@ -254,7 +234,6 @@ export default function App() {
             userSelect: 'none'
           }}>{value}</span>
           
-          {/* 加號按鈕 */}
           <button 
             style={{
               flex: 1,
@@ -309,29 +288,26 @@ export default function App() {
   };
 
   const handleSave = () => {
-    const sourceCanvas = canvasRef.current;
-    if (!sourceCanvas) return;
-
+    if (!canvasRef.current) return;
+    
+    // 建立暫時畫布以繪製浮水印
     const saveCanvas = document.createElement('canvas');
     const saveCtx = saveCanvas.getContext('2d');
+    
+    // 檢查 saveCtx 是否存在 (解決 saveCtx possibly null 錯誤)
+    if (!saveCtx) return;
 
-    // --- 修正：加入這行檢查，告訴 TypeScript 如果沒有 Context 就停止 ---
-    if (!saveCtx) return; 
-    // -------------------------------------------------------------
-
+    const sourceCanvas = canvasRef.current;
     saveCanvas.width = sourceCanvas.width;
     saveCanvas.height = sourceCanvas.height;
 
-    // 之後的代碼不需要改動
     saveCtx.drawImage(sourceCanvas, 0, 0);
 
     const fontSize = Math.max(20, Math.floor(saveCanvas.height * 0.035));
-    
     saveCtx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
     saveCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     saveCtx.textAlign = 'right';
     saveCtx.textBaseline = 'bottom';
-
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.6)';
     saveCtx.shadowBlur = 4;
     saveCtx.shadowOffsetX = 2;
@@ -441,7 +417,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 2. 中光位 (Midtones) - 新增 */}
+          {/* 2. 中光位 (Midtones) */}
           <div className="control-group" style={{marginTop:'15px'}}>
             <label style={{color: '#ccc', fontSize:'0.9em', borderLeft:'3px solid #999', paddingLeft:'5px'}}>🌗 整體平衡 (Midtones)</label>
             <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
