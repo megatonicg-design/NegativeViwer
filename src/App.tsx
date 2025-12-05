@@ -288,86 +288,61 @@ export default function App() {
   };
 
   const handleSave = () => {
-    if (!canvasRef.current) return;
-    
-    // 建立暫時畫布以繪製浮水印
+    const sourceCanvas = canvasRef.current;
+    if (!sourceCanvas) return;
+
+    // 1. 建立幕後畫布
     const saveCanvas = document.createElement('canvas');
     const saveCtx = saveCanvas.getContext('2d');
-    
-    // 檢查 saveCtx 是否存在 (解決 saveCtx possibly null 錯誤)
-    if (!saveCtx) return;
+    if (!saveCtx) return; // TypeScript 有時會檢查 ctx 是否存在，加這句更穩陣
 
-    const sourceCanvas = canvasRef.current;
     saveCanvas.width = sourceCanvas.width;
     saveCanvas.height = sourceCanvas.height;
 
+    // 2. 複製原圖
     saveCtx.drawImage(sourceCanvas, 0, 0);
 
-    // --- 開始繪製浮水印 ---
-
-    // ============ 🛠️ 自定義參數區 (修改這裡) 🛠️ ============
+    // --- 參數設定 ---
     
-    // [A] 透明度 (Opacity)
-    // 範圍：0.0 (全透明) 到 1.0 (實色)
-    // 建議：0.5 - 0.8 之間比較適合浮水印
-    const opacity = 0.55; 
+    const opacity = 0.8; 
+    const sizeScaleFactor = 0.035; 
+    const bottomPaddingScale = 0.04;
 
-    // [B] 字體樣式 (Font Family & Style)
-    // 你可以改成 'Times New Roman', 'Courier New' 等
-    const fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-    const fontStyle = 'bold'; // 可選 'normal', 'italic', 'bold'
-
-    // [C] 字體大小比例 (Size Scale)
-    // 0.035 代表字高佔畫面總高度的 3.5%。
-    // 想字大啲就改做 0.05，細啲就 0.025
-    const sizeScaleFactor = 0.025;
-    const bottomPaddingScale = 0.04; // 距離底部的距離 (高度的 4%)
-
-    // [D] 文字內容 (分兩行定義)
     const line1Text = "Filter by:";
     const line2Text = "Megatoni Production";
 
-    // =====================================================
+    // *** 這裡定義了變數 ***
+    const fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    const fontStyle = 'bold'; 
+
+    // ===========================================
 
     // 計算字體大小
     const fontSize = Math.max(20, Math.floor(saveCanvas.height * sizeScaleFactor));
-    const lineHeight = fontSize * 1.3; // 行高設寬一點點，兩行無咁逼
+    const lineHeight = fontSize * 1.3;
 
-    // 設定畫筆
-    saveCtx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+    // *** 修正重點：這裡必須用到上面的 fontStyle 和 fontFamily ***
+    // 之前可能寫死咗做 `bold ${fontSize}px -apple-system...`，導致上面的變數無人用
+    saveCtx.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
+    
     saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-    
-    // --- 關鍵修改 1: 設定文字對齊為「置中」 ---
     saveCtx.textAlign = 'center';
-    
-    // 設定基準線為「底部」
     saveCtx.textBaseline = 'bottom';
 
-    // 加入陰影
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    saveCtx.shadowBlur = 2;
-    saveCtx.shadowOffsetX = 2; // 陰影置中
+    saveCtx.shadowBlur = 4;
+    saveCtx.shadowOffsetX = 0;
     saveCtx.shadowOffsetY = 2;
 
-    // --- 關鍵修改 2: 計算置中位置 ---
-    
-    // X 座標：畫布闊度的一半
     const x = saveCanvas.width / 2;
-    
-    // Y 座標：畫布高度 減去 底部邊距
     const paddingBottom = Math.floor(saveCanvas.height * bottomPaddingScale);
     const y = saveCanvas.height - paddingBottom;
 
-    // --- 分兩次繪製 ---
-    
-    // 1. 畫第二行 (Megatoni Production)
+    // 繪製文字
     saveCtx.fillText(line2Text, x, y);
-    
-    // 2. 畫第一行 (Filter by:)
-    // 向上移一個行高
     saveCtx.fillText(line1Text, x, y - lineHeight);
 
-    // --- 觸發下載 ---
+    // 觸發下載
     const link = document.createElement('a');
     link.download = `Megatoni-Film-${Date.now()}.jpg`;
     link.href = saveCanvas.toDataURL('image/jpeg', 0.95);
