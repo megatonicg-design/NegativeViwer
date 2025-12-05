@@ -304,9 +304,9 @@ export default function App() {
 
     // --- 參數設定 ---
     
-    const opacity = 0.5; 
-    const sizeScaleFactor = 0.025; 
-    const bottomPaddingScale = 0.04;
+    const opacity = 0.45; 
+    const sizeScaleFactor = 0.020; 
+    const bottomPaddingScale = 0.08;
 
     const line1Text = "Filter by:";
     const line2Text = "Megatoni Production";
