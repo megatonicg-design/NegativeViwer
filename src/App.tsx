@@ -330,8 +330,8 @@ export default function App() {
     saveCtx.textBaseline = 'bottom';
 
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    saveCtx.shadowBlur = 4;
-    saveCtx.shadowOffsetX = 0;
+    saveCtx.shadowBlur = 2;
+    saveCtx.shadowOffsetX = 2;
     saveCtx.shadowOffsetY = 2;
 
     const x = saveCanvas.width / 2;
