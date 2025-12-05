@@ -27,26 +27,34 @@ body {
 h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #fff; }
 
 /* Canvas 容器 */
+/* Canvas 容器：加入 Sticky 吸頂效果 + 高度限制 */
 .canvas-wrapper {
-  position: relative;
-  margin: 20px 0;
-  border: 2px solid #444;
-  background: #000;
-  /* overflow: hidden;  <-- 移除呢個，因為放大鏡可能會超出邊界 */
-  border-radius: 8px;
-  min-height: 200px;
+  position: sticky;       /* 關鍵：讓它吸附在頂部 */
+  top: 0;                 /* 吸附位置：最頂端 */
+  z-index: 100;           /* 確保它浮在所有內容之上 */
+  
+  max-height: 40vh;       /* 關鍵：限制高度只佔螢幕 40% */
+  margin: 0 -20px 20px;   /* 稍微修正邊距，讓它貼邊 */
+  background: #1a1a1a;    /* 背景色，避免透明時看到下方內容捲動 */
+  border-bottom: 2px solid #444; /* 加條線區隔 */
+  
+  /* 居中設定 */
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: none; /* 防止在 canvas 上滑動時觸發頁面滾動 */
+  overflow: hidden;       /* 隱藏超出的部分 */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5); /* 加點陰影讓層次分明 */
 }
 
+/* Canvas 本體：確保它乖乖縮放 */
 canvas {
-  max-width: 100%;
-  height: auto;
+  max-width: 100%;        /* 寬度不超過容器 */
+  max-height: 40vh;       /* 高度跟隨容器限制 */
+  width: auto;            /* 自動調整寬度以保持比例 */
+  height: auto;           /* 自動調整高度 */
   display: block;
-  /* 當選取模式時，隱藏鼠標，因為有放大鏡指引 */
-  cursor: crosshair; 
+  object-fit: contain;    /* 確保整張圖片都看得到，不會變形 */
+  cursor: crosshair;
 }
 
 /* --- 新增：放大鏡樣式 --- */
@@ -62,7 +70,7 @@ canvas {
   height: 100px;
   /* 陰影提升層次感 */
   box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-  z-index: 100;
+  z-index: 200;
   /* 十字準星 (用 CSS 畫) */
   display: flex;
   align-items: center;
