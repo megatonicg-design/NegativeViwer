@@ -310,7 +310,7 @@ export default function App() {
     // [A] 透明度 (Opacity)
     // 範圍：0.0 (全透明) 到 1.0 (實色)
     // 建議：0.5 - 0.8 之間比較適合浮水印
-    const opacity = 0.5; 
+    const opacity = 0.35; 
 
     // [B] 字體樣式 (Font Family & Style)
     // 你可以改成 'Times New Roman', 'Courier New' 等
@@ -349,7 +349,7 @@ export default function App() {
 
     // 計算位置
     const padding = Math.floor(fontSize / 1.5); // 邊距
-    const x = saveCanvas.width - padding;
+    const x = saveCanvas.width / 2 - padding;
     // y 是「最底那一行」的底部位置
     const y = saveCanvas.height - padding;
 
