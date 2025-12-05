@@ -310,7 +310,7 @@ export default function App() {
     // [A] 透明度 (Opacity)
     // 範圍：0.0 (全透明) 到 1.0 (實色)
     // 建議：0.5 - 0.8 之間比較適合浮水印
-    const opacity = 0.35; 
+    const opacity = 0.45; 
 
     // [B] 字體樣式 (Font Family & Style)
     // 你可以改成 'Times New Roman', 'Courier New' 等
@@ -320,7 +320,7 @@ export default function App() {
     // [C] 字體大小比例 (Size Scale)
     // 0.035 代表字高佔畫面總高度的 3.5%。
     // 想字大啲就改做 0.05，細啲就 0.025
-    const sizeScaleFactor = 0.015;
+    const sizeScaleFactor = 0.02;
     const bottomPaddingScale = 0.04; // 距離底部的距離 (高度的 4%)
 
     // [D] 文字內容 (分兩行定義)
