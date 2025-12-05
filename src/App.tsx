@@ -358,9 +358,30 @@ export default function App() {
       <h1>🎞️ 菲林預覽室</h1>
 
       <div className="btn-group">
-        <div className="upload-btn-wrapper">
-          <button className="primary">📸 拍攝 / 上載</button>
-          <input type="file" accept="image/*" onChange={handleImageUpload} />
+      <div style={{display:'flex', gap:'10px', width:'100%', justifyContent:'center'}}>
+          
+          {/* 按鈕 A: 專用來影相 (Android 會直接開相機) */}
+          <div className="upload-btn-wrapper" style={{flex:1}}>
+            <button className="primary" style={{width:'100%'}}>📸 影相</button>
+            <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment"  // 關鍵：這行讓 Android 直接跳轉相機
+              onChange={handleImageUpload} 
+            />
+          </div>
+
+          {/* 按鈕 B: 專用來揀相 (iPad 推薦用呢個，亦可選相機) */}
+          <div className="upload-btn-wrapper" style={{flex:1}}>
+            <button className="secondary" style={{width:'100%', background:'#444'}}>🖼️ 相簿</button>
+            <input 
+              type="file" 
+              accept="image/*" 
+              // 這裡不加 capture，會彈出選單 (拍照/相簿/檔案)
+              onChange={handleImageUpload} 
+            />
+          </div>
+
         </div>
         <button className="success" onClick={handleSave} disabled={!imageLoaded}>💾 儲存</button>
       </div>
