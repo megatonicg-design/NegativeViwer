@@ -309,10 +309,44 @@ export default function App() {
   };
 
   const handleSave = () => {
-    if (!canvasRef.current) return;
+    const sourceCanvas = canvasRef.current;
+    if (!sourceCanvas) return;
+
+    const saveCanvas = document.createElement('canvas');
+    const saveCtx = saveCanvas.getContext('2d');
+
+    // --- 修正：加入這行檢查，告訴 TypeScript 如果沒有 Context 就停止 ---
+    if (!saveCtx) return; 
+    // -------------------------------------------------------------
+
+    saveCanvas.width = sourceCanvas.width;
+    saveCanvas.height = sourceCanvas.height;
+
+    // 之後的代碼不需要改動
+    saveCtx.drawImage(sourceCanvas, 0, 0);
+
+    const fontSize = Math.max(20, Math.floor(saveCanvas.height * 0.035));
+    
+    saveCtx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+    saveCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    saveCtx.textAlign = 'right';
+    saveCtx.textBaseline = 'bottom';
+
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    saveCtx.shadowBlur = 4;
+    saveCtx.shadowOffsetX = 2;
+    saveCtx.shadowOffsetY = 2;
+
+    const text = "Filter by: Megatoni Production";
+    const padding = Math.floor(fontSize / 1.8); 
+    const x = saveCanvas.width - padding;
+    const y = saveCanvas.height - padding;
+
+    saveCtx.fillText(text, x, y);
+
     const link = document.createElement('a');
-    link.download = `film-preview-${Date.now()}.jpg`;
-    link.href = canvasRef.current.toDataURL('image/jpeg', 0.9);
+    link.download = `Megatoni-Film-${Date.now()}.jpg`;
+    link.href = saveCanvas.toDataURL('image/jpeg', 0.92);
     link.click();
   };
 
