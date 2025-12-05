@@ -308,10 +308,10 @@ export default function App() {
     
     // [修改 1] 改為根據「寬度」計算大小，解決不同相機比例問題
     // 0.045 代表字體大小是圖片寬度的 4.5%
-    const sizeScaleFactor = 0.020; 
+    const sizeScaleFactor = 0.025; 
     
     // [修改 2] 距離底部的距離，同樣改用寬度做基準
-    const bottomPaddingScale = 0.05; 
+    const bottomPaddingScale = 0.01; 
 
     // [修改 3] 強制使用 Arial 字體，解決 iOS/Android 行高差異
     const fontFamily = 'Arial, Helvetica, sans-serif'; 
