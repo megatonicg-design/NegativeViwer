@@ -305,7 +305,7 @@ export default function App() {
 
     const fontSize = Math.max(20, Math.floor(saveCanvas.height * 0.035));
     saveCtx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
-    saveCtx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    saveCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     saveCtx.textAlign = 'right';
     saveCtx.textBaseline = 'bottom';
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.6)';
@@ -314,7 +314,7 @@ export default function App() {
     saveCtx.shadowOffsetY = 2;
 
     const text = "Filter by: Megatoni Production";
-    const padding = Math.floor(fontSize / 1.8); 
+    const padding = Math.floor(fontSize / 3); 
     const x = saveCanvas.width - padding;
     const y = saveCanvas.height - padding;
 
