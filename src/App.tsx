@@ -345,8 +345,8 @@ export default function App() {
 
     // 加入陰影
     saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    saveCtx.shadowBlur = 4;
-    saveCtx.shadowOffsetX = 0; // 陰影置中
+    saveCtx.shadowBlur = 2;
+    saveCtx.shadowOffsetX = 2; // 陰影置中
     saveCtx.shadowOffsetY = 2;
 
     // --- 關鍵修改 2: 計算置中位置 ---
