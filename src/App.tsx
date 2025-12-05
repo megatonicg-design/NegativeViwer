@@ -303,23 +303,67 @@ export default function App() {
 
     saveCtx.drawImage(sourceCanvas, 0, 0);
 
-    const fontSize = Math.max(20, Math.floor(saveCanvas.height * 0.035));
-    saveCtx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
-    saveCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    saveCtx.textAlign = 'right';
-    saveCtx.textBaseline = 'bottom';
-    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    // --- 開始繪製浮水印 ---
+
+    // ============ 🛠️ 自定義參數區 (修改這裡) 🛠️ ============
+    
+    // [A] 透明度 (Opacity)
+    // 範圍：0.0 (全透明) 到 1.0 (實色)
+    // 建議：0.5 - 0.8 之間比較適合浮水印
+    const opacity = 0.5; 
+
+    // [B] 字體樣式 (Font Family & Style)
+    // 你可以改成 'Times New Roman', 'Courier New' 等
+    const fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    const fontStyle = 'bold'; // 可選 'normal', 'italic', 'bold'
+
+    // [C] 字體大小比例 (Size Scale)
+    // 0.035 代表字高佔畫面總高度的 3.5%。
+    // 想字大啲就改做 0.05，細啲就 0.025
+    const sizeScaleFactor = 0.035;
+
+    // [D] 文字內容 (分兩行定義)
+    const line1Text = "Filter by:";
+    const line2Text = "Megatoni Production";
+
+    // =====================================================
+
+    // 計算實際參數
+    // 保持動態大小，確保大圖細圖比例一致
+    const fontSize = Math.max(20, Math.floor(saveCanvas.height * sizeScaleFactor));
+    // 計算行高 (Line Height)，通常設為字體的 1.2 倍左右，讓兩行之間有呼吸位
+    const lineHeight = fontSize * 1.2;
+
+    // 設定畫筆
+    saveCtx.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
+    // 使用模板字符串插入上面設定的 opacity
+    saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+    saveCtx.textAlign = 'right';    // 對齊右邊
+    saveCtx.textBaseline = 'bottom'; // 對齊底部基準線
+
+    // 加入陰影 (增加清晰度，數值可不改)
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.8)'; // 陰影深色一點配合透明文字
     saveCtx.shadowBlur = 4;
     saveCtx.shadowOffsetX = 2;
     saveCtx.shadowOffsetY = 2;
 
-    const text = "Filter by: Megatoni Production";
-    const padding = Math.floor(fontSize / 3); 
+    // 計算位置
+    const padding = Math.floor(fontSize / 1.5); // 邊距
     const x = saveCanvas.width - padding;
+    // y 是「最底那一行」的底部位置
     const y = saveCanvas.height - padding;
 
-    saveCtx.fillText(text, x, y);
+    // --- 分兩次繪製 (解決不支援換行問題) ---
+    
+    // 1. 先畫第二行 (最底果行：Megatoni Production)
+    // 位置在基準點 y
+    saveCtx.fillText(line2Text, x, y);
+    
+    // 2. 再畫第一行 (上面果行：Filter by:)
+    // 位置要向上移一個行高 (y - lineHeight)
+    saveCtx.fillText(line1Text, x, y - lineHeight);
 
+    // --- 觸發下載 ---
     const link = document.createElement('a');
     link.download = `Megatoni-Film-${Date.now()}.jpg`;
     link.href = saveCanvas.toDataURL('image/jpeg', 0.92);
