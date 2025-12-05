@@ -304,8 +304,8 @@ export default function App() {
 
     // --- 參數設定 ---
     
-    const opacity = 0.8; 
-    const sizeScaleFactor = 0.035; 
+    const opacity = 0.5; 
+    const sizeScaleFactor = 0.025; 
     const bottomPaddingScale = 0.04;
 
     const line1Text = "Filter by:";
