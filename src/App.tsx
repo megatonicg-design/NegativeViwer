@@ -385,7 +385,7 @@ export default function App() {
       <div className="btn-group">
         <div className="upload-btn-wrapper">
           <button className="primary">📸 拍攝 / 上載</button>
-          <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} />
+          <input type="file" accept="image/*" onChange={handleImageUpload} />
         </div>
         <button className="success" onClick={handleSave} disabled={!imageLoaded}>💾 儲存</button>
       </div>
