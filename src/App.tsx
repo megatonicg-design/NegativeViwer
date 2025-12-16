@@ -319,7 +319,7 @@ export default function App() {
 
     // --- 參數設定 ---
     
-    const opacity = 0.45; 
+    const opacity = 0.2; 
     
     // [修改 1] 改為根據「寬度」計算大小，解決不同相機比例問題
     // 0.045 代表字體大小是圖片寬度的 4.5%
@@ -331,7 +331,7 @@ export default function App() {
     // [修改 3] 強制使用 Arial 字體，解決 iOS/Android 行高差異
     const fontFamily = 'Arial, Helvetica, sans-serif'; 
 
-    const line1Text = "Filter by:";
+    const line1Text = " ";
     const line2Text = "Megatoni Production";
 
     // ===========================================
@@ -377,7 +377,8 @@ export default function App() {
 
   return (
     <div className="container">
-      <h1>🎞️ 菲林預覽室</h1>
+      <h1>🎞️ Negative Viewer 🎞️</h1>
+      <h1>by Megatoni Production</h1>
 
       <div className="btn-group">
       <div style={{display:'flex', gap:'10px', width:'100%', justifyContent:'center'}}>
