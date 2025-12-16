@@ -45,6 +45,7 @@ export default function App() {
     show: false, x: 0, y: 0, bgX: 0, bgY: 0, bgWidth: 0, bgHeight: 0
   });
 
+  // Refs (加入明確 Type)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const originalDataRef = useRef<ImageData | null>(null);
   const previewUrlRef = useRef<string>('');
@@ -52,31 +53,30 @@ export default function App() {
   // 監聽變化
   useEffect(() => {
     if (imageLoaded) processImage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseColor, baseExposure, settings, imageLoaded]);
 
   // --- 處理圖片上載 ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; // 使用 Optional Chaining (?.)
+    const file = e.target.files?.[0]; 
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      // 修正錯誤：'event.target' is possibly 'null' 及 'Type mismatch'
-      // 我們直接檢查 result 是否為 string
+      // TS Fix: 檢查 result 是否為 string
       const result = event.target?.result;
       
       if (typeof result === 'string') {
         const img = new Image();
         img.onload = () => {
           const canvas = canvasRef.current;
-          // 修正錯誤：'canvas' is possibly 'null'
+          // TS Fix: 確保 canvas 存在
           if (!canvas) return;
 
           const ctx = canvas.getContext('2d');
-          // 修正錯誤：'ctx' is possibly 'null'
+          // TS Fix: 確保 ctx 存在
           if (!ctx) return;
           
-          // 現在 TS 知道 canvas 和 ctx 一定存在，不會報錯了
           canvas.width = img.width;
           canvas.height = img.height;
 
@@ -100,15 +100,12 @@ export default function App() {
 
   // --- 核心影像處理 ---
   const processImage = () => {
-    // 檢查 originalDataRef 是否有東西
     if (!originalDataRef.current) return;
     
     const canvas = canvasRef.current;
-    // 修正錯誤：'canvas' is possibly 'null'
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    // 修正錯誤：'ctx' is possibly 'null'
     if (!ctx) return;
     
     const newData = new ImageData(
@@ -169,6 +166,9 @@ export default function App() {
 
   // --- 放大鏡 ---
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // 阻止預設行為以防止捲動 (重要)
+    if (isPickingBase) e.preventDefault();
+
     if (!isPickingBase || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -279,7 +279,8 @@ export default function App() {
     const index = (y * canvas.width + x) * 4;
     const data = originalDataRef.current.data;
 
-    if (data[index] !== undefined) {
+    // TS check for data existence
+    if (data && data[index] !== undefined) {
       setBaseColor({ r: data[index], g: data[index+1], b: data[index+2] });
       setIsPickingBase(false);
       setMagnifierState(s => ({ ...s, show: false }));
@@ -306,57 +307,45 @@ export default function App() {
     const sourceCanvas = canvasRef.current;
     if (!sourceCanvas) return;
 
-    // 1. 建立幕後畫布
     const saveCanvas = document.createElement('canvas');
     const saveCtx = saveCanvas.getContext('2d');
-    if (!saveCtx) return; // TypeScript 有時會檢查 ctx 是否存在，加這句更穩陣
+    if (!saveCtx) return; 
 
     saveCanvas.width = sourceCanvas.width;
     saveCanvas.height = sourceCanvas.height;
 
-    // 2. 複製原圖
+    // 複製原圖
     saveCtx.drawImage(sourceCanvas, 0, 0);
 
-    // --- 參數設定 ---
+    // --- 浮水印參數設定 ---
     
-    const opacity = 0.025; 
+    // [修正] 透明度設為 0.7，否則 0.025 看不到
+    const opacity = 0.7; 
     
-    // [修改 1] 改為根據「寬度」計算大小，解決不同相機比例問題
-    // 0.045 代表字體大小是圖片寬度的 4.5%
-    const sizeScaleFactor = 0.025; 
-    
-    // [修改 2] 距離底部的距離，同樣改用寬度做基準
-    const bottomPaddingScale = 0.01; 
-
-    // [修改 3] 強制使用 Arial 字體，解決 iOS/Android 行高差異
+    const sizeScaleFactor = 0.045; 
+    const bottomPaddingScale = 0.05; 
     const fontFamily = 'Arial, Helvetica, sans-serif'; 
 
-    const line1Text = " ";
+    const line1Text = "Filter by:"; // 加回文字
     const line2Text = "Megatoni Production";
 
-    // ===========================================
-
     // 計算字體大小
-    // 計算字體大小 (改用 Width 做基準)
     const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
     const lineHeight = fontSize * 1.3;
 
     // 設定畫筆
-    saveCtx.font = `bold ${fontSize}px ${fontFamily}`; // 使用 Arial
+    saveCtx.font = `bold ${fontSize}px ${fontFamily}`;
     saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
     saveCtx.textAlign = 'center';
     saveCtx.textBaseline = 'bottom';
 
     // 加入陰影
-    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
     saveCtx.shadowBlur = 4;
     saveCtx.shadowOffsetX = 0;
     saveCtx.shadowOffsetY = 2;
 
-    // 計算位置
     const x = saveCanvas.width / 2;
-    
-    // [修改 4] 底部邊距也用 Width 計算，確保位置一致
     const paddingBottom = Math.floor(saveCanvas.width * bottomPaddingScale);
     const y = saveCanvas.height - paddingBottom;
 
@@ -378,29 +367,30 @@ export default function App() {
   return (
     <div className="container">
       <h1>🎞️ Negative Viewer 🎞️</h1>
-      <h1>by Megatoni Production</h1>
+      <h2 style={{fontSize: '0.9rem', color: '#888', marginTop: '-10px', marginBottom: '20px'}}>
+        by Megatoni Production
+      </h2>
 
       <div className="btn-group">
-      <div style={{display:'flex', gap:'10px', width:'100%', justifyContent:'center'}}>
+        <div style={{display:'flex', gap:'10px', width:'100%', justifyContent:'center'}}>
           
-          {/* 按鈕 A: 專用來影相 (Android 會直接開相機) */}
+          {/* 按鈕 A: 影相 (Android 優先) */}
           <div className="upload-btn-wrapper" style={{flex:1}}>
             <button className="primary" style={{width:'100%'}}>📸 影相</button>
             <input 
               type="file" 
               accept="image/*" 
-              capture="environment"  // 關鍵：這行讓 Android 直接跳轉相機
+              capture="environment" 
               onChange={handleImageUpload} 
             />
           </div>
 
-          {/* 按鈕 B: 專用來揀相 (iPad 推薦用呢個，亦可選相機) */}
+          {/* 按鈕 B: 相簿 (iPad 優先) */}
           <div className="upload-btn-wrapper" style={{flex:1}}>
             <button className="secondary" style={{width:'100%', background:'#444'}}>🖼️ 相簿</button>
             <input 
               type="file" 
               accept="image/*" 
-              // 這裡不加 capture，會彈出選單 (拍照/相簿/檔案)
               onChange={handleImageUpload} 
             />
           </div>
@@ -416,9 +406,9 @@ export default function App() {
            disabled={!imageLoaded}
            style={{flex: 2}}
          >
-           {isPickingBase ? '👆 請按住畫面選取' : '🎨 1. 校正片基'}
+           {isPickingBase ? '👆 按住選取片基' : '🎨 1. 校正片基'}
          </button>
-         <button className="secondary" onClick={resetBase} disabled={!imageLoaded}>↩️ 還原片基</button>
+         <button className="secondary" onClick={resetBase} disabled={!imageLoaded}>↩️ 還原</button>
       </div>
 
       <div className="canvas-wrapper">
@@ -507,6 +497,26 @@ export default function App() {
           <div className="control-group" style={{textAlign:'center', marginTop: '20px'}}>
              <button className="secondary" onClick={resetSettings}>🔄 重置調色參數</button>
           </div>
+
+          {/* Buy Me a Coffee 按鈕 (加回這裡) */}
+          <div className="bmc-container">
+            <p style={{color: '#888', fontSize: '0.8rem', marginBottom: '10px'}}>
+              覺得好用？支持開發者飲杯咖啡 ☕️
+            </p>
+            <a 
+              className="bmc-button"
+              target="_blank" 
+              rel="noreferrer" 
+              href="https://www.buymeacoffee.com/megatoni" 
+            >
+              <span className="bmc-icon">☕</span>
+              Buy me a coffee
+            </a>
+            <p style={{color: '#555', fontSize: '0.7rem', marginTop: '10px'}}>
+              Megatoni Production &copy; {new Date().getFullYear()}
+            </p>
+          </div>
+
         </div>
       )}
     </div>
