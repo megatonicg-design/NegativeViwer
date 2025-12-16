@@ -348,7 +348,7 @@ export default function App() {
     saveCtx.textBaseline = 'bottom';
 
     // 加入陰影
-    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
     saveCtx.shadowBlur = 4;
     saveCtx.shadowOffsetX = 0;
     saveCtx.shadowOffsetY = 2;
