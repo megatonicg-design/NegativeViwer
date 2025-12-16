@@ -319,7 +319,7 @@ export default function App() {
 
     // --- 參數設定 ---
     
-    const opacity = 0.2; 
+    const opacity = 0.05; 
     
     // [修改 1] 改為根據「寬度」計算大小，解決不同相機比例問題
     // 0.045 代表字體大小是圖片寬度的 4.5%
