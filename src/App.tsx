@@ -19,6 +19,64 @@ interface Settings {
   bHigh: number;
 }
 
+// 2. 獨立的濾鏡運算函數 (核心優化：抽離邏輯以供重用)
+// 這個函數純粹做數學運算，不涉及 DOM 操作，可以同時服務「縮圖」和「大圖」
+const applyFilters = (
+  sourceData: Uint8ClampedArray, 
+  width: number, 
+  height: number, 
+  baseColor: {r: number, g: number, b: number}, 
+  baseExposure: number, 
+  settings: Settings
+): ImageData => {
+  const newData = new Uint8ClampedArray(sourceData); // 複製數據，不破壞原圖
+  const { r: baseR, g: baseG, b: baseB } = baseColor;
+  const { 
+    brightness, contrast, 
+    rShadow, gShadow, bShadow, 
+    rMid, gMid, bMid, 
+    rHigh, gHigh, bHigh 
+  } = settings;
+
+  for (let i = 0; i < newData.length; i += 4) {
+    let r = newData[i]; let g = newData[i+1]; let b = newData[i+2];
+
+    // A. 去色罩 + 曝光補償
+    r = baseR > 10 ? (r / baseR) * 255 * baseExposure : r;
+    g = baseG > 10 ? (g / baseG) * 255 * baseExposure : g;
+    b = baseB > 10 ? (b / baseB) * 255 * baseExposure : b;
+
+    // B. 反轉
+    r = 255 - r;
+    g = 255 - g;
+    b = 255 - b;
+
+    // C. 分離色調處理
+    r += rShadow; g += gShadow; b += bShadow;
+
+    r *= (1 + rHigh / 100);
+    g *= (1 + gHigh / 100);
+    b *= (1 + bHigh / 100);
+
+    // Math.pow 運算最耗效能，但在縮圖上跑會很快
+    if (rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + rMid / 50));
+    if (gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + gMid / 50));
+    if (bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + bMid / 50));
+
+    // D. 亮度
+    r *= brightness; g *= brightness; b *= brightness;
+
+    // E. 對比度
+    r = contrast * (r - 128) + 128;
+    g = contrast * (g - 128) + 128;
+    b = contrast * (b - 128) + 128;
+
+    newData[i] = r; newData[i+1] = g; newData[i+2] = b;
+  }
+
+  return new ImageData(newData, width, height);
+};
+
 export default function App() {
   // --- 狀態管理 ---
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
@@ -45,14 +103,17 @@ export default function App() {
     show: false, x: 0, y: 0, bgX: 0, bgY: 0, bgWidth: 0, bgHeight: 0
   });
 
-  // Refs (加入明確 Type)
+  // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const originalDataRef = useRef<ImageData | null>(null);
   const previewUrlRef = useRef<string>('');
+  
+  // 優化重點：分開儲存「預覽縮圖」和「原始大圖」
+  const previewDataRef = useRef<ImageData | null>(null); // 縮圖 (800px)
+  const fullResDataRef = useRef<ImageData | null>(null); // 大圖 (原始解析度)
 
-  // 監聽變化
+  // 監聽變化 -> 觸發預覽運算
   useEffect(() => {
-    if (imageLoaded) processImage();
+    if (imageLoaded) processPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseColor, baseExposure, settings, imageLoaded]);
 
@@ -63,34 +124,51 @@ export default function App() {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      // TS Fix: 檢查 result 是否為 string
       const result = event.target?.result;
       
       if (typeof result === 'string') {
         const img = new Image();
         img.onload = () => {
           const canvas = canvasRef.current;
-          // TS Fix: 確保 canvas 存在
           if (!canvas) return;
 
           const ctx = canvas.getContext('2d');
-          // TS Fix: 確保 ctx 存在
           if (!ctx) return;
           
-          canvas.width = img.width;
-          canvas.height = img.height;
+          // --- 步驟 1: 處理大圖 (Full Res) ---
+          // 建立一個隱藏的 Canvas 來獲取原始像素數據
+          const fullCanvas = document.createElement('canvas');
+          fullCanvas.width = img.width;
+          fullCanvas.height = img.height;
+          const fullCtx = fullCanvas.getContext('2d');
+          if (fullCtx) {
+              fullCtx.drawImage(img, 0, 0);
+              // 儲存原始大圖數據到 Ref，留待 Save 時用
+              fullResDataRef.current = fullCtx.getImageData(0, 0, img.width, img.height);
+          }
+
+          // --- 步驟 2: 處理縮圖 (Preview) ---
+          // 限制預覽圖最大寬度為 800px (手機操作流暢的關鍵)
+          const previewMaxWidth = 800; 
+          const scale = Math.min(1, previewMaxWidth / img.width);
+          
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
 
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           
-          originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          // 儲存縮圖數據到 Ref，用於即時運算
+          previewDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
           
+          // 重置狀態
           setImageLoaded(true);
           setBaseColor(defaultBaseColor);
           setBaseExposure(1.1); 
           resetSettings();
           setIsPickingBase(false);
           
-          setTimeout(processImage, 50);
+          // 立即執行一次預覽
+          setTimeout(processPreview, 50);
         };
         img.src = result;
       }
@@ -98,75 +176,29 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // --- 核心影像處理 ---
-  const processImage = () => {
-    if (!originalDataRef.current) return;
+  // --- 即時預覽處理 (只算縮圖) ---
+  const processPreview = () => {
+    // 改用 previewDataRef
+    if (!previewDataRef.current || !canvasRef.current) return;
     
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    const newData = new ImageData(
-      new Uint8ClampedArray(originalDataRef.current.data),
-      originalDataRef.current.width,
-      originalDataRef.current.height
+
+    // 呼叫 helper function 處理縮圖
+    const processedImageData = applyFilters(
+        previewDataRef.current.data, 
+        previewDataRef.current.width, 
+        previewDataRef.current.height,
+        baseColor, baseExposure, settings
     );
-    const data = newData.data;
 
-    const { r: baseR, g: baseG, b: baseB } = baseColor;
-    const { 
-      brightness, contrast, 
-      rShadow, gShadow, bShadow, 
-      rMid, gMid, bMid, 
-      rHigh, gHigh, bHigh 
-    } = settings;
-
-    for (let i = 0; i < data.length; i += 4) {
-      let r = data[i]; let g = data[i+1]; let b = data[i+2];
-
-      // A. 去色罩 + 曝光補償
-      r = baseR > 10 ? (r / baseR) * 255 * baseExposure : r;
-      g = baseG > 10 ? (g / baseG) * 255 * baseExposure : g;
-      b = baseB > 10 ? (b / baseB) * 255 * baseExposure : b;
-
-      // B. 反轉
-      r = 255 - r;
-      g = 255 - g;
-      b = 255 - b;
-
-      // C. 分離色調處理
-      // 1. 黑位
-      r += rShadow; g += gShadow; b += bShadow;
-
-      // 2. 高光
-      r *= (1 + rHigh / 100);
-      g *= (1 + gHigh / 100);
-      b *= (1 + bHigh / 100);
-
-      // 3. 中光位
-      if (rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + rMid / 50));
-      if (gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + gMid / 50));
-      if (bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + bMid / 50));
-
-      // D. 亮度
-      r *= brightness; g *= brightness; b *= brightness;
-
-      // E. 對比度
-      r = contrast * (r - 128) + 128;
-      g = contrast * (g - 128) + 128;
-      b = contrast * (b - 128) + 128;
-
-      data[i] = r; data[i+1] = g; data[i+2] = b;
-    }
-    ctx.putImageData(newData, 0, 0);
+    ctx.putImageData(processedImageData, 0, 0);
     previewUrlRef.current = canvas.toDataURL(); 
   };
 
   // --- 放大鏡 ---
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    // 阻止預設行為以防止捲動 (重要)
     if (isPickingBase) e.preventDefault();
 
     if (!isPickingBase || !canvasRef.current) return;
@@ -195,80 +227,9 @@ export default function App() {
     });
   };
 
-  // 輔助函數：渲染加減按鈕
-  const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
-    const value = settings[settingKey];
-    
-    const update = (delta: number) => {
-      setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
-    };
-
-    return (
-      <div style={{
-        flex: 1,              
-        minWidth: 0,          
-        margin: '0 2px'       
-      }}>
-        <div style={{
-          color: color, 
-          fontSize:'0.75rem', 
-          fontWeight:'bold', 
-          marginBottom:'2px', 
-          textAlign:'center'
-        }}>
-          {label}
-        </div>
-
-        <div style={{
-          display:'flex', 
-          alignItems:'center', 
-          background:'#333',     
-          borderRadius:'6px',    
-          overflow: 'hidden'     
-        }}>
-          <button 
-            style={{
-              flex: 1,           
-              padding:'8px 0',   
-              background:'transparent', 
-              color:'#fff', 
-              fontSize:'1.1rem',
-              lineHeight: 1,
-              cursor: 'pointer',
-              minWidth: '25px'   
-            }}
-            onClick={() => update(-1)}
-          >-</button>
-          
-          <span style={{
-            flex: 1,             
-            textAlign:'center', 
-            fontSize:'0.85rem',  
-            color:'#fff',
-            fontFamily: 'monospace', 
-            userSelect: 'none'
-          }}>{value}</span>
-          
-          <button 
-            style={{
-              flex: 1,
-              padding:'8px 0',
-              background:'transparent', 
-              color:'#fff', 
-              fontSize:'1.1rem',
-              lineHeight: 1,
-              cursor: 'pointer',
-              minWidth: '25px'
-            }}
-            onClick={() => update(1)}
-          >+</button>
-        </div>
-      </div>
-    );
-  };
-
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isPickingBase || !originalDataRef.current || !canvasRef.current) return;
+    // 這裡我們從 previewDataRef 取色，因為它就是畫面上看到的
+    if (!isPickingBase || !previewDataRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -277,14 +238,104 @@ export default function App() {
     const y = Math.floor((e.clientY - rect.top) * scaleY);
 
     const index = (y * canvas.width + x) * 4;
-    const data = originalDataRef.current.data;
+    const data = previewDataRef.current.data;
 
-    // TS check for data existence
     if (data && data[index] !== undefined) {
       setBaseColor({ r: data[index], g: data[index+1], b: data[index+2] });
       setIsPickingBase(false);
       setMagnifierState(s => ({ ...s, show: false }));
     }
+  };
+
+  // --- 儲存功能 (高清 + 浮水印) ---
+  const handleSave = () => {
+    // 關鍵：儲存時使用 fullResDataRef (原始大圖)
+    if (!fullResDataRef.current) return;
+
+    // 1. 對高清大圖進行濾鏡運算 (這一步可能會花 1-2 秒，視乎手機效能)
+    const processedFullData = applyFilters(
+        fullResDataRef.current.data,
+        fullResDataRef.current.width,
+        fullResDataRef.current.height,
+        baseColor, baseExposure, settings
+    );
+
+    // 2. 建立暫時 Canvas 進行輸出
+    const saveCanvas = document.createElement('canvas');
+    saveCanvas.width = fullResDataRef.current.width;
+    saveCanvas.height = fullResDataRef.current.height;
+    const saveCtx = saveCanvas.getContext('2d');
+    if (!saveCtx) return;
+
+    // 將處理好的大圖放上去
+    saveCtx.putImageData(processedFullData, 0, 0);
+
+    // --- 繪製浮水印 (與之前邏輯相同) ---
+    const opacity = 0.7; 
+    const sizeScaleFactor = 0.045; 
+    const bottomPaddingScale = 0.05; 
+    const fontFamily = 'Arial, Helvetica, sans-serif'; 
+
+    const line1Text = "Filter by:"; 
+    const line2Text = "Megatoni Production";
+
+    // 計算字體大小 (基於大圖寬度自動調整，所以大圖一樣清晰)
+    const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
+    const lineHeight = fontSize * 1.3;
+
+    saveCtx.font = `bold ${fontSize}px ${fontFamily}`;
+    saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+    saveCtx.textAlign = 'center';
+    saveCtx.textBaseline = 'bottom';
+
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    saveCtx.shadowBlur = 4;
+    saveCtx.shadowOffsetX = 0;
+    saveCtx.shadowOffsetY = 2;
+
+    const x = saveCanvas.width / 2;
+    const paddingBottom = Math.floor(saveCanvas.width * bottomPaddingScale);
+    const y = saveCanvas.height - paddingBottom;
+
+    saveCtx.fillText(line2Text, x, y);
+    saveCtx.fillText(line1Text, x, y - lineHeight);
+
+    // 觸發下載
+    const link = document.createElement('a');
+    link.download = `Megatoni-Film-${Date.now()}.jpg`;
+    link.href = saveCanvas.toDataURL('image/jpeg', 0.95); // 高品質 JPEG
+    link.click();
+  };
+
+  // 輔助函數：渲染加減按鈕 (UI 保持不變)
+  const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
+    const value = settings[settingKey];
+    const update = (delta: number) => {
+      setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
+    };
+
+    return (
+      <div style={{ flex: 1, minWidth: 0, margin: '0 2px' }}>
+        <div style={{ color: color, fontSize:'0.75rem', fontWeight:'bold', marginBottom:'2px', textAlign:'center' }}>
+          {label}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', background:'#333', borderRadius:'6px', overflow: 'hidden' }}>
+          <button 
+            style={{ flex: 1, padding:'8px 0', background:'transparent', color:'#fff', fontSize:'1.1rem', lineHeight: 1, cursor: 'pointer', minWidth: '25px' }}
+            onClick={() => update(-1)}
+          >-</button>
+          
+          <span style={{ flex: 1, textAlign:'center', fontSize:'0.85rem', color:'#fff', fontFamily: 'monospace', userSelect: 'none' }}>
+            {value}
+          </span>
+          
+          <button 
+            style={{ flex: 1, padding:'8px 0', background:'transparent', color:'#fff', fontSize:'1.1rem', lineHeight: 1, cursor: 'pointer', minWidth: '25px' }}
+            onClick={() => update(1)}
+          >+</button>
+        </div>
+      </div>
+    );
   };
 
   const resetBase = () => {
@@ -295,69 +346,11 @@ export default function App() {
 
   const resetSettings = () => {
     setSettings({ 
-      brightness: 1.0, 
-      contrast: 1.1, 
+      brightness: 1.0, contrast: 1.1, 
       rShadow: 0, gShadow: 0, bShadow: 0, 
       rHigh: 0, gHigh: 0, bHigh: 0, 
       rMid: 0, gMid: 0, bMid: 0,
     });
-  };
-
-  const handleSave = () => {
-    const sourceCanvas = canvasRef.current;
-    if (!sourceCanvas) return;
-
-    const saveCanvas = document.createElement('canvas');
-    const saveCtx = saveCanvas.getContext('2d');
-    if (!saveCtx) return; 
-
-    saveCanvas.width = sourceCanvas.width;
-    saveCanvas.height = sourceCanvas.height;
-
-    // 複製原圖
-    saveCtx.drawImage(sourceCanvas, 0, 0);
-
-    // --- 浮水印參數設定 ---
-    
-    // [修正] 透明度設為 0.7，否則 0.025 看不到
-    const opacity = 0.7; 
-    
-    const sizeScaleFactor = 0.045; 
-    const bottomPaddingScale = 0.05; 
-    const fontFamily = 'Arial, Helvetica, sans-serif'; 
-
-    const line1Text = "Filter by:"; // 加回文字
-    const line2Text = "Megatoni Production";
-
-    // 計算字體大小
-    const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
-    const lineHeight = fontSize * 1.3;
-
-    // 設定畫筆
-    saveCtx.font = `bold ${fontSize}px ${fontFamily}`;
-    saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-    saveCtx.textAlign = 'center';
-    saveCtx.textBaseline = 'bottom';
-
-    // 加入陰影
-    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-    saveCtx.shadowBlur = 4;
-    saveCtx.shadowOffsetX = 0;
-    saveCtx.shadowOffsetY = 2;
-
-    const x = saveCanvas.width / 2;
-    const paddingBottom = Math.floor(saveCanvas.width * bottomPaddingScale);
-    const y = saveCanvas.height - paddingBottom;
-
-    // 繪製文字
-    saveCtx.fillText(line2Text, x, y);
-    saveCtx.fillText(line1Text, x, y - lineHeight);
-
-    // 觸發下載
-    const link = document.createElement('a');
-    link.download = `Megatoni-Film-${Date.now()}.jpg`;
-    link.href = saveCanvas.toDataURL('image/jpeg', 0.95);
-    link.click();
   };
 
   const handleSlider = (key: keyof Settings, val: string) => {
@@ -373,28 +366,16 @@ export default function App() {
 
       <div className="btn-group">
         <div style={{display:'flex', gap:'10px', width:'100%', justifyContent:'center'}}>
-          
           {/* 按鈕 A: 影相 (Android 優先) */}
           <div className="upload-btn-wrapper" style={{flex:1}}>
             <button className="primary" style={{width:'100%'}}>📸 影相</button>
-            <input 
-              type="file" 
-              accept="image/*" 
-              capture="environment" 
-              onChange={handleImageUpload} 
-            />
+            <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} />
           </div>
-
           {/* 按鈕 B: 相簿 (iPad 優先) */}
           <div className="upload-btn-wrapper" style={{flex:1}}>
             <button className="secondary" style={{width:'100%', background:'#444'}}>🖼️ 相簿</button>
-            <input 
-              type="file" 
-              accept="image/*" 
-              onChange={handleImageUpload} 
-            />
+            <input type="file" accept="image/*" onChange={handleImageUpload} />
           </div>
-
         </div>
         <button className="success" onClick={handleSave} disabled={!imageLoaded}>💾 儲存</button>
       </div>
@@ -498,7 +479,7 @@ export default function App() {
              <button className="secondary" onClick={resetSettings}>🔄 重置調色參數</button>
           </div>
 
-          {/* Buy Me a Coffee 按鈕 (加回這裡) */}
+          {/* Buy Me a Coffee 按鈕 */}
           <div className="bmc-container">
             <p style={{color: '#888', fontSize: '0.8rem', marginBottom: '10px'}}>
               覺得好用？支持開發者飲杯咖啡 ☕️
