@@ -163,13 +163,13 @@ button:active { transform: scale(0.98); }
   left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer;
 }
 
-/* App.css - Buy Me a Coffee */
+/* App.css - Buy Me a Coffee (頂部版) */
 .bmc-container {
-  margin-top: 30px;
-  margin-bottom: 20px;
+  margin-top: 10px;      /* 減少上邊距，緊貼標題 */
+  margin-bottom: 20px;   /* 增加下邊距，與按鈕區隔開 */
   text-align: center;
-  border-top: 1px solid #333;
-  padding-top: 20px;
+  padding: 10px 0;       /* 稍微減少內邊距 */
+  /* border-top: 1px solid #333;  <-- 移除這行，上方不需要線條了 */
 }
 
 .bmc-button {
@@ -181,9 +181,9 @@ button:active { transform: scale(0.98); }
   text-decoration: none;
   font-family: 'Arial', sans-serif;
   font-weight: 700;
-  font-size: 1rem;
-  padding: 12px 24px;
-  border-radius: 8px;
+  font-size: 0.9rem;     /* 稍微縮小字體，避免搶過主要功能按鈕 */
+  padding: 8px 20px;     /* 稍微縮小按鈕尺寸 */
+  border-radius: 20px;   /* 改成膠囊形狀，感覺更現代 */
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
   transition: transform 0.1s, opacity 0.2s;
   letter-spacing: 0.5px;
@@ -191,4 +191,4 @@ button:active { transform: scale(0.98); }
 
 .bmc-button:hover { opacity: 0.9; }
 .bmc-button:active { transform: scale(0.97); }
-.bmc-icon { width: 20px; height: 20px; margin-right: 8px; font-size: 1.2rem; }
+.bmc-icon { width: 18px; height: 18px; margin-right: 6px; font-size: 1.1rem; }
