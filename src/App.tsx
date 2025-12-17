@@ -271,12 +271,12 @@ export default function App() {
     saveCtx.putImageData(processedFullData, 0, 0);
 
     // --- 繪製浮水印 (與之前邏輯相同) ---
-    const opacity = 0.7; 
+    const opacity = 0.05; 
     const sizeScaleFactor = 0.045; 
     const bottomPaddingScale = 0.05; 
     const fontFamily = 'Arial, Helvetica, sans-serif'; 
 
-    const line1Text = "Filter by:"; 
+    const line1Text = " "; 
     const line2Text = "Megatoni Production";
 
     // 計算字體大小 (基於大圖寬度自動調整，所以大圖一樣清晰)
