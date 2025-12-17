@@ -19,44 +19,96 @@ interface Settings {
   bHigh: number;
 }
 
+// 2. 抽離濾鏡運算邏輯 (Helper Function)
+// 這樣我們可以分別對「縮圖」和「大圖」呼叫同一個算法
+const applyFilters = (
+  sourceData: Uint8ClampedArray, 
+  width: number, 
+  height: number, 
+  baseColor: {r:number, g:number, b:number}, 
+  baseExposure: number, 
+  settings: Settings
+) => {
+  const newData = new Uint8ClampedArray(sourceData); // 複製數據
+  const { r: baseR, g: baseG, b: baseB } = baseColor;
+  const { 
+    brightness, contrast, 
+    rShadow, gShadow, bShadow, 
+    rMid, gMid, bMid, 
+    rHigh, gHigh, bHigh 
+  } = settings;
+
+  for (let i = 0; i < newData.length; i += 4) {
+    let r = newData[i]; let g = newData[i+1]; let b = newData[i+2];
+
+    // A. 去色罩 + 曝光補償
+    r = baseR > 10 ? (r / baseR) * 255 * baseExposure : r;
+    g = baseG > 10 ? (g / baseG) * 255 * baseExposure : g;
+    b = baseB > 10 ? (b / baseB) * 255 * baseExposure : b;
+
+    // B. 反轉
+    r = 255 - r;
+    g = 255 - g;
+    b = 255 - b;
+
+    // C. 分離色調處理
+    r += rShadow; g += gShadow; b += bShadow;
+
+    r *= (1 + rHigh / 100);
+    g *= (1 + gHigh / 100);
+    b *= (1 + bHigh / 100);
+
+    // Math.pow 最耗效能，但在縮圖上跑會很快
+    if (rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + rMid / 50));
+    if (gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + gMid / 50));
+    if (bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + bMid / 50));
+
+    // D. 亮度 & 對比度
+    r *= brightness; g *= brightness; b *= brightness;
+    r = contrast * (r - 128) + 128;
+    g = contrast * (g - 128) + 128;
+    b = contrast * (b - 128) + 128;
+
+    newData[i] = r; newData[i+1] = g; newData[i+2] = b;
+  }
+  return new ImageData(newData, width, height);
+};
+
 export default function App() {
   // --- 狀態管理 ---
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
   const [isPickingBase, setIsPickingBase] = useState<boolean>(false);
   
-  // 預設片基顏色
   const defaultBaseColor = { r: 240, g: 170, b: 140 };
   const [baseColor, setBaseColor] = useState(defaultBaseColor); 
-  
-  // 掃描曝光
   const [baseExposure, setBaseExposure] = useState<number>(1.1); 
 
-  // 調色參數
   const [settings, setSettings] = useState<Settings>({
-    brightness: 1.0,
-    contrast: 1.1,
+    brightness: 1.0, contrast: 1.1,
     rShadow: 0, gShadow: 0, bShadow: 0,
     rMid: 0, gMid: 0, bMid: 0,
     rHigh: 0, gHigh: 0, bHigh: 0
   });
 
-  // 放大鏡狀態
   const [magnifierState, setMagnifierState] = useState({
     show: false, x: 0, y: 0, bgX: 0, bgY: 0, bgWidth: 0, bgHeight: 0
   });
 
-  // Refs
+  // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const originalDataRef = useRef<ImageData | null>(null);
   const previewUrlRef = useRef<string>('');
 
-  // 監聽變化
+  // [關鍵修改] 兩個 Data Refs
+  const previewDataRef = useRef<ImageData | null>(null); // 存縮圖 (800px)
+  const fullResDataRef = useRef<ImageData | null>(null); // 存原圖 (12MP)
+
+  // 監聽變化 -> 只運算縮圖
   useEffect(() => {
-    if (imageLoaded) processImage();
+    if (imageLoaded) processPreviewImage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseColor, baseExposure, settings, imageLoaded]);
 
-  // --- 處理圖片上載 ---
+  // --- 處理圖片上載 (同時準備兩份數據) ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; 
     if (!file) return;
@@ -70,16 +122,30 @@ export default function App() {
         img.onload = () => {
           const canvas = canvasRef.current;
           if (!canvas) return;
-
           const ctx = canvas.getContext('2d');
           if (!ctx) return;
+
+          // 1. 準備全畫質數據 (Full Res) - 不顯示，只存入記憶體
+          const fullCanvas = document.createElement('canvas');
+          fullCanvas.width = img.width;
+          fullCanvas.height = img.height;
+          const fullCtx = fullCanvas.getContext('2d');
+          if (fullCtx) {
+            fullCtx.drawImage(img, 0, 0);
+            fullResDataRef.current = fullCtx.getImageData(0, 0, img.width, img.height);
+          }
+
+          // 2. 準備縮圖數據 (Preview) - 用於顯示
+          const previewMaxWidth = 800; // 限制 800px 寬，確保極速流暢
+          const scale = Math.min(1, previewMaxWidth / img.width);
           
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
 
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           
-          originalDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          // 儲存縮圖的 Raw Data
+          previewDataRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
           
           setImageLoaded(true);
           setBaseColor(defaultBaseColor);
@@ -87,7 +153,7 @@ export default function App() {
           resetSettings();
           setIsPickingBase(false);
           
-          setTimeout(processImage, 50);
+          setTimeout(processPreviewImage, 50);
         };
         img.src = result;
       }
@@ -95,72 +161,92 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // --- 核心影像處理 ---
-  const processImage = () => {
-    if (!originalDataRef.current) return;
-    
+  // --- 預覽處理 (只算縮圖) ---
+  const processPreviewImage = () => {
+    if (!previewDataRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    const newData = new ImageData(
-      new Uint8ClampedArray(originalDataRef.current.data),
-      originalDataRef.current.width,
-      originalDataRef.current.height
+
+    // 呼叫 helper function 運算縮圖
+    const processedData = applyFilters(
+      previewDataRef.current.data,
+      previewDataRef.current.width,
+      previewDataRef.current.height,
+      baseColor,
+      baseExposure,
+      settings
     );
-    const data = newData.data;
 
-    const { r: baseR, g: baseG, b: baseB } = baseColor;
-    const { 
-      brightness, contrast, 
-      rShadow, gShadow, bShadow, 
-      rMid, gMid, bMid, 
-      rHigh, gHigh, bHigh 
-    } = settings;
-
-    for (let i = 0; i < data.length; i += 4) {
-      let r = data[i]; let g = data[i+1]; let b = data[i+2];
-
-      // A. 去色罩 + 曝光補償
-      r = baseR > 10 ? (r / baseR) * 255 * baseExposure : r;
-      g = baseG > 10 ? (g / baseG) * 255 * baseExposure : g;
-      b = baseB > 10 ? (b / baseB) * 255 * baseExposure : b;
-
-      // B. 反轉
-      r = 255 - r;
-      g = 255 - g;
-      b = 255 - b;
-
-      // C. 分離色調處理
-      r += rShadow; g += gShadow; b += bShadow;
-
-      r *= (1 + rHigh / 100);
-      g *= (1 + gHigh / 100);
-      b *= (1 + bHigh / 100);
-
-      if (rMid !== 0) r = 255 * Math.pow(Math.max(0, r / 255), 1 / (1 + rMid / 50));
-      if (gMid !== 0) g = 255 * Math.pow(Math.max(0, g / 255), 1 / (1 + gMid / 50));
-      if (bMid !== 0) b = 255 * Math.pow(Math.max(0, b / 255), 1 / (1 + bMid / 50));
-
-      // D. 亮度 & 對比度
-      r *= brightness; g *= brightness; b *= brightness;
-      r = contrast * (r - 128) + 128;
-      g = contrast * (g - 128) + 128;
-      b = contrast * (b - 128) + 128;
-
-      data[i] = r; data[i+1] = g; data[i+2] = b;
-    }
-    ctx.putImageData(newData, 0, 0);
+    ctx.putImageData(processedData, 0, 0);
     previewUrlRef.current = canvas.toDataURL(); 
+  };
+
+  // --- 儲存處理 (這時才算大圖) ---
+  const handleSave = () => {
+    // 讀取全畫質數據
+    if (!fullResDataRef.current) return;
+
+    // 執行運算 (因為是千萬像素，這裡會停頓 1-2 秒，正常現象)
+    const processedFullData = applyFilters(
+      fullResDataRef.current.data,
+      fullResDataRef.current.width,
+      fullResDataRef.current.height,
+      baseColor,
+      baseExposure,
+      settings
+    );
+
+    // 建立輸出用的 Canvas
+    const saveCanvas = document.createElement('canvas');
+    saveCanvas.width = fullResDataRef.current.width;
+    saveCanvas.height = fullResDataRef.current.height;
+    const saveCtx = saveCanvas.getContext('2d');
+    if (!saveCtx) return;
+
+    // 放回處理好的大圖
+    saveCtx.putImageData(processedFullData, 0, 0);
+
+    // --- 繪製浮水印 (完美適配大圖) ---
+    const opacity = 0.7; 
+    const sizeScaleFactor = 0.045; // 寬度的 4.5%
+    const bottomPaddingScale = 0.05; 
+    const fontFamily = 'Arial, Helvetica, sans-serif'; 
+    const line1Text = "Filter by:"; 
+    const line2Text = "Megatoni Production";
+
+    const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
+    const lineHeight = fontSize * 1.3;
+
+    saveCtx.font = `bold ${fontSize}px ${fontFamily}`;
+    saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+    saveCtx.textAlign = 'center';
+    saveCtx.textBaseline = 'bottom';
+
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    saveCtx.shadowBlur = 4;
+    saveCtx.shadowOffsetX = 0;
+    saveCtx.shadowOffsetY = 2;
+
+    const x = saveCanvas.width / 2;
+    const paddingBottom = Math.floor(saveCanvas.width * bottomPaddingScale);
+    const y = saveCanvas.height - paddingBottom;
+
+    saveCtx.fillText(line2Text, x, y);
+    saveCtx.fillText(line1Text, x, y - lineHeight);
+
+    // 下載
+    const link = document.createElement('a');
+    link.download = `Megatoni-Film-${Date.now()}.jpg`;
+    link.href = saveCanvas.toDataURL('image/jpeg', 0.95);
+    link.click();
   };
 
   // --- 放大鏡 ---
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (isPickingBase) e.preventDefault();
-
     if (!isPickingBase || !canvasRef.current) return;
+    
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const pointerX = e.clientX - rect.left;
@@ -187,7 +273,8 @@ export default function App() {
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isPickingBase || !originalDataRef.current || !canvasRef.current) return;
+    // 這裡我們從 previewDataRef 吸色 (縮圖已經足夠準確選取片基)
+    if (!isPickingBase || !previewDataRef.current || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -196,7 +283,7 @@ export default function App() {
     const y = Math.floor((e.clientY - rect.top) * scaleY);
 
     const index = (y * canvas.width + x) * 4;
-    const data = originalDataRef.current.data;
+    const data = previewDataRef.current.data;
 
     if (data && data[index] !== undefined) {
       setBaseColor({ r: data[index], g: data[index+1], b: data[index+2] });
@@ -205,19 +292,14 @@ export default function App() {
     }
   };
 
-  // 輔助函數：渲染加減按鈕
   const renderChannelControl = (label: string, settingKey: keyof Settings, color: string) => {
     const value = settings[settingKey];
-    
     const update = (delta: number) => {
       setSettings(prev => ({ ...prev, [settingKey]: prev[settingKey] + delta }));
     };
-
     return (
       <div style={{ flex: 1, minWidth: 0, margin: '0 2px' }}>
-        <div style={{ color: color, fontSize:'0.75rem', fontWeight:'bold', marginBottom:'2px', textAlign:'center' }}>
-          {label}
-        </div>
+        <div style={{ color: color, fontSize:'0.75rem', fontWeight:'bold', marginBottom:'2px', textAlign:'center' }}>{label}</div>
         <div style={{ display:'flex', alignItems:'center', background:'#333', borderRadius:'6px', overflow: 'hidden' }}>
           <button style={{ flex: 1, padding:'8px 0', background:'transparent', color:'#fff', fontSize:'1.1rem', lineHeight: 1, cursor: 'pointer', minWidth: '25px' }} onClick={() => update(-1)}>-</button>
           <span style={{ flex: 1, textAlign:'center', fontSize:'0.85rem', color:'#fff', fontFamily: 'monospace', userSelect: 'none' }}>{value}</span>
@@ -242,53 +324,6 @@ export default function App() {
     });
   };
 
-  const handleSave = () => {
-    const sourceCanvas = canvasRef.current;
-    if (!sourceCanvas) return;
-
-    const saveCanvas = document.createElement('canvas');
-    const saveCtx = saveCanvas.getContext('2d');
-    if (!saveCtx) return; 
-
-    saveCanvas.width = sourceCanvas.width;
-    saveCanvas.height = sourceCanvas.height;
-
-    saveCtx.drawImage(sourceCanvas, 0, 0);
-
-    // --- 浮水印 ---
-    const opacity = 0.025; 
-    const sizeScaleFactor = 0.045; 
-    const bottomPaddingScale = 0.05; 
-    const fontFamily = 'Arial, Helvetica, sans-serif'; 
-    const line1Text = " "; 
-    const line2Text = "Megatoni Production";
-
-    const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
-    const lineHeight = fontSize * 1.3;
-
-    saveCtx.font = `bold ${fontSize}px ${fontFamily}`;
-    saveCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-    saveCtx.textAlign = 'center';
-    saveCtx.textBaseline = 'bottom';
-
-    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-    saveCtx.shadowBlur = 4;
-    saveCtx.shadowOffsetX = 0;
-    saveCtx.shadowOffsetY = 2;
-
-    const x = saveCanvas.width / 2;
-    const paddingBottom = Math.floor(saveCanvas.width * bottomPaddingScale);
-    const y = saveCanvas.height - paddingBottom;
-
-    saveCtx.fillText(line2Text, x, y);
-    saveCtx.fillText(line1Text, x, y - lineHeight);
-
-    const link = document.createElement('a');
-    link.download = `Megatoni-Film-${Date.now()}.jpg`;
-    link.href = saveCanvas.toDataURL('image/jpeg', 0.95);
-    link.click();
-  };
-
   const handleSlider = (key: keyof Settings, val: string) => {
     setSettings(prev => ({ ...prev, [key]: parseFloat(val) }));
   };
@@ -300,14 +335,9 @@ export default function App() {
         by Megatoni Production
       </h2>
 
-      {/* --- Buy Me a Coffee (移到這裡，按鈕上方) --- */}
+      {/* Buy Me a Coffee (頂部) */}
       <div className="bmc-container">
-          <a 
-            className="bmc-button"
-            target="_blank" 
-            rel="noreferrer" 
-            href="https://www.buymeacoffee.com/megatoni" 
-          >
+          <a className="bmc-button" target="_blank" rel="noreferrer" href="https://www.buymeacoffee.com/megatoni">
             <span className="bmc-icon">☕</span>
             Buy me a coffee
           </a>
@@ -315,13 +345,10 @@ export default function App() {
 
       <div className="btn-group">
         <div style={{display:'flex', gap:'10px', width:'100%', justifyContent:'center'}}>
-          {/* 按鈕 A: 影相 (Android 優先) */}
           <div className="upload-btn-wrapper" style={{flex:1}}>
             <button className="primary" style={{width:'100%'}}>📸 影相</button>
             <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} />
           </div>
-
-          {/* 按鈕 B: 相簿 (iPad 優先) */}
           <div className="upload-btn-wrapper" style={{flex:1}}>
             <button className="secondary" style={{width:'100%', background:'#444'}}>🖼️ 相簿</button>
             <input type="file" accept="image/*" onChange={handleImageUpload} />
@@ -395,7 +422,7 @@ export default function App() {
           
           <hr style={{borderColor:'#444', margin:'15px 0'}}/>
 
-          {/* 1. 黑位 (Shadows) */}
+          {/* 1. 黑位 */}
           <div className="control-group">
             <label style={{color: '#aaa', fontSize:'0.9em', borderLeft:'3px solid #666', paddingLeft:'5px'}}>⚫ 黑位 (Shadows)</label>
             <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
@@ -405,7 +432,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 2. 中光位 (Midtones) */}
+          {/* 2. 中光位 */}
           <div className="control-group" style={{marginTop:'15px'}}>
             <label style={{color: '#ccc', fontSize:'0.9em', borderLeft:'3px solid #999', paddingLeft:'5px'}}>🌗 整體平衡 (Midtones)</label>
             <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
@@ -415,7 +442,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3. 高光位 (Highlights) */}
+          {/* 3. 高光位 */}
           <div className="control-group" style={{marginTop:'15px'}}>
             <label style={{color: '#fff', fontSize:'0.9em', borderLeft:'3px solid #fff', paddingLeft:'5px'}}>⚪ 高光 (Highlights)</label>
             <div style={{display:'flex', gap:'3px', marginTop:'5px'}}>
@@ -428,8 +455,6 @@ export default function App() {
           <div className="control-group" style={{textAlign:'center', marginTop: '20px'}}>
              <button className="secondary" onClick={resetSettings}>🔄 重置調色參數</button>
           </div>
-          
-          {/* 舊的 Buy Me a Coffee 位置已移除 */}
         </div>
       )}
     </div>
