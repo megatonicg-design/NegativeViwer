@@ -136,7 +136,7 @@ export default function App() {
           }
 
           // 2. 準備縮圖數據 (Preview) - 用於顯示
-          const previewMaxWidth = 800; // 限制 800px 寬，確保極速流暢
+          const previewMaxWidth = 1000; // 限制 800px 寬，確保極速流暢
           const scale = Math.min(1, previewMaxWidth / img.width);
           
           canvas.width = img.width * scale;
@@ -208,11 +208,11 @@ export default function App() {
     saveCtx.putImageData(processedFullData, 0, 0);
 
     // --- 繪製浮水印 (完美適配大圖) ---
-    const opacity = 0.7; 
+    const opacity = 0.025; 
     const sizeScaleFactor = 0.045; // 寬度的 4.5%
     const bottomPaddingScale = 0.05; 
     const fontFamily = 'Arial, Helvetica, sans-serif'; 
-    const line1Text = "Filter by:"; 
+    const line1Text = " "; 
     const line2Text = "Megatoni Production";
 
     const fontSize = Math.max(20, Math.floor(saveCanvas.width * sizeScaleFactor));
@@ -223,7 +223,7 @@ export default function App() {
     saveCtx.textAlign = 'center';
     saveCtx.textBaseline = 'bottom';
 
-    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    saveCtx.shadowColor = 'rgba(0, 0, 0, 0.2)';
     saveCtx.shadowBlur = 4;
     saveCtx.shadowOffsetX = 0;
     saveCtx.shadowOffsetY = 2;
