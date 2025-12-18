@@ -331,6 +331,17 @@ export default function App() {
   return (
     <div className="container">
       <h1>🎞️ Negative Viewer 🎞️</h1>
+
+      {/* --- 修改位置：警告標語 --- */}
+      <div style={{
+        textAlign: 'center',
+        color: '#ffcc00',
+        fontSize: '0.80rem',
+        marginBottom: '15px',
+        marginTop: '8px' // 稍微加點間距
+      }}>
+        ⚠️ 建議使用 Google Chrome 開啟 ⚠️
+      </div>
       
       {/* --- 修改位置：IG Logo + 連結 --- */}
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-5px', marginBottom: '15px' }}>
